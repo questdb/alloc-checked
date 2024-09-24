@@ -22,5 +22,8 @@ no_std = ["hashbrown"]
 # `hashbrown` is only needed in `no_std` mode, so it's optional.
 hashbrown = { version = "0.14", optional = true }
 
+[dev-dependencies]
+libc-print = "0.1.23"
+
 [build-dependencies]
-rustc_version = "0.4.0"
+rustc_version = "0.4.1"

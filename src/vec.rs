@@ -41,11 +41,21 @@ mod tests {
     use core::alloc::{AllocError, Layout};
     use core::ptr::NonNull;
     use core::sync::atomic::{AtomicUsize, Ordering};
+    use alloc::collections::TryReserveError;
     use super::*;
 
     struct WatermarkAllocator {
         watermark: usize,
         in_use: AtomicUsize,
+    }
+
+    impl WatermarkAllocator {
+        fn new(watermark: usize) -> Self {
+            Self {
+                watermark,
+                in_use: AtomicUsize::new(0),
+            }
+        }
     }
 
     unsafe impl Allocator for WatermarkAllocator {
@@ -71,17 +81,21 @@ mod tests {
         }
 
         unsafe fn deallocate(&self, ptr: NonNull<u8>, layout: Layout) {
-            todo!()
+            Global.deallocate(ptr, layout);
+            self.in_use.fetch_sub(layout.size(), Ordering::SeqCst);
         }
     }
 
     #[test]
     fn test_vec() {
-        let mut vec = Vec::new_in(Global);
+        let wma = WatermarkAllocator::new(32);
+        let mut vec = Vec::new_in(wma);
         vec.try_push(1).unwrap();
         vec.try_push(2).unwrap();
         vec.try_push(3).unwrap();
-        assert_eq!(vec.inner.as_slice(), &[1, 2, 3]);
+        vec.try_push(4).unwrap();
+        let _err: TryReserveError = vec.try_push(5).unwrap_err();
+        assert_eq!(vec.inner.as_slice(), &[1, 2, 3, 4]);
     }
 
 }
