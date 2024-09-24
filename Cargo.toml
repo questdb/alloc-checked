@@ -1,0 +1,26 @@
+[package]
+name = "alloc-checked"
+version = "0.1.0"
+edition = "2021"
+
+# This crate requires nightly Rust due to alloc usage and other nightly features
+[package.metadata]
+rust-version = "nightly"
+
+[package.metadata.docs.rs]
+# Specify to use the nightly toolchain for documentation generation
+rustdoc-args = ["--cfg", "nightly"]
+
+[features]
+# By default, the crate compiles with the `std` feature enabled.
+default = []
+
+# The `no_std` feature explicitly disables `std` and enables alloc and hashbrown.
+no_std = ["hashbrown"]
+
+[dependencies]
+# `hashbrown` is only needed in `no_std` mode, so it's optional.
+hashbrown = { version = "0.14", optional = true }
+
+[build-dependencies]
+rustc_version = "0.4.0"
