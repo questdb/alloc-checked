@@ -73,6 +73,23 @@ impl<T, A: Allocator> Vec<T, A> {
     }
 }
 
+impl<T: Clone, A: Allocator> Vec<T, A> {
+    #[inline]
+    pub fn extend_from_slice(&mut self, slice: &[T]) -> Result<(), TryReserveError> {
+        self.reserve(slice.len())?;
+        // SAFETY: we just reserved space for `slice.len()` more elements.
+        unsafe {
+            let len = self.inner.len();
+            let end = self.inner.as_mut_ptr().add(len);
+            for (i, value) in slice.iter().enumerate() {
+                core::ptr::write(end.add(i), value.clone());
+            }
+            self.inner.set_len(len + slice.len());
+        }
+        Ok(())
+    }
+}
+
 impl<T, I: SliceIndex<[T]>, A: Allocator> Index<I> for Vec<T, A> {
     type Output = I::Output;
 
@@ -286,5 +303,17 @@ mod tests {
         assert_eq!(vec[1], 2);
         assert_eq!(vec[2], 3);
         assert_eq!(vec[3], 4);
+    }
+
+    #[test]
+    fn test_extend_from_slice() {
+        let wma = WatermarkAllocator::new(32);
+        let mut vec = Vec::new_in(wma);
+        vec.extend_from_slice(&[1, 2, 3, 4]).unwrap();
+        assert_eq!(vec.inner.as_slice(), &[1, 2, 3, 4]);
+
+        let _err: TryReserveError = vec.extend_from_slice(&[5, 6]).unwrap_err();
+
+        vec.extend_from_slice(&[]).unwrap();
     }
 }
