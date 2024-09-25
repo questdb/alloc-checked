@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  lint:
+    name: Linting and Formatting (Linux)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: nightly
+          components: rustfmt, clippy
+
+      - name: Run rustfmt
+        run: cargo fmt --check
+
+      - name: Run clippy (all targets)
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Run clippy with no_std
+        run: cargo clippy --all-targets --features no_std -- -D warnings
+
+  build_test:
+    name: Build and Test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest, macos-12]
+        features: ["", "--features=no_std"]
+        profile: ["", "--release"]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: nightly
+
+      # Build
+      - name: Build
+        run: cargo build ${{ matrix.profile }} ${{ matrix.features }}
+
+      # Test
+      - name: Test
+        run: cargo test ${{ matrix.profile }} ${{ matrix.features }}
