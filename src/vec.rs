@@ -18,6 +18,11 @@ impl<T, A: Allocator> Vec<T, A> {
     }
 
     #[inline]
+    pub fn capacity(&self) -> usize {
+        self.inner.capacity()
+    }
+
+    #[inline]
     pub fn reserve(&mut self, additional: usize) -> Result<(), TryReserveError> {
         self.inner.try_reserve(additional)
     }
@@ -63,6 +68,11 @@ impl<T, A: Allocator> Vec<T, A> {
     }
 
     #[inline]
+    pub fn as_slice(&self) -> &[T] {
+        self
+    }
+
+    #[inline]
     pub fn as_ptr(&self) -> *const T {
         self.inner.as_ptr()
     }
@@ -70,6 +80,11 @@ impl<T, A: Allocator> Vec<T, A> {
     #[inline]
     pub fn as_mut_ptr(&mut self) -> *mut T {
         self.inner.as_mut_ptr()
+    }
+
+    #[inline]
+    pub fn clear(&mut self) {
+        self.inner.clear();
     }
 }
 
@@ -186,10 +201,11 @@ mod tests {
     }
 
     #[test]
-    fn test_push() {
+    fn test_basics() {
         let wma = WatermarkAllocator::new(32);
         let mut vec = Vec::new_in(wma);
         assert_eq!(vec.len(), 0);
+        assert_eq!(vec.capacity(), 0);
         assert!(vec.is_empty());
         vec.push(1).unwrap();
         assert_eq!(vec.len(), 1);
@@ -198,9 +214,14 @@ mod tests {
         vec.push(3).unwrap();
         vec.push(4).unwrap();
         assert_eq!(vec.len(), 4);
+        assert_eq!(vec.capacity(), 4);
         let _err: TryReserveError = vec.push(5).unwrap_err();
-        assert_eq!(vec.inner.as_slice(), &[1, 2, 3, 4]);
+        assert_eq!(vec.as_slice(), &[1, 2, 3, 4]);
         assert_eq!(vec.len(), 4);
+        vec.clear();
+        assert_eq!(vec.len(), 0);
+        assert!(vec.is_empty());
+        assert_eq!(vec.capacity(), 4);
     }
 
     #[test]
