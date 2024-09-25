@@ -39,10 +39,37 @@ impl<T, A: Allocator> Vec<T, A> {
         self.reserve(1)?;
         // SAFETY: we just reserved space for one more element.
         unsafe {
-            let len = self.inner.len();
-            let end = self.inner.as_mut_ptr().add(len);
-            core::ptr::write(end, value);
-            self.inner.set_len(len + 1)
+            self.unsafe_push(value);
+        }
+        Ok(())
+    }
+
+    #[inline]
+    unsafe fn unsafe_push(&mut self, value: T) {
+        let len = self.inner.len();
+        let end = self.inner.as_mut_ptr().add(len);
+        core::ptr::write(end, value);
+        self.inner.set_len(len + 1)
+    }
+
+    pub fn extend(&mut self, iter: impl IntoIterator<Item = T>) -> Result<(), TryReserveError> {
+        let mut iter = iter.into_iter();
+        let (lower_bound, _) = iter.size_hint();
+
+        // Extend N with pre-allocation from the iterator
+        self.reserve(lower_bound)?;
+        for _ in 0..lower_bound {
+            let Some(value) = iter.next() else {
+                return Ok(());
+            };
+            unsafe {
+                self.unsafe_push(value);
+            }
+        }
+
+        // Dynamically append the rest
+        for value in iter {
+            self.push(value)?;
         }
         Ok(())
     }
@@ -377,5 +404,77 @@ mod tests {
         vec[2] = 7;
         vec[3] = 8;
         assert_eq!(&*vec, &[5, 6, 7, 8]);
+    }
+
+    struct MyIter {
+        counter: usize,
+        min_size_hint: usize,
+    }
+
+    impl MyIter {
+        fn new(min_size_hint: usize) -> Self {
+            Self {
+                counter: 0,
+                min_size_hint,
+            }
+        }
+    }
+
+    impl Iterator for MyIter {
+        type Item = usize;
+
+        fn next(&mut self) -> Option<Self::Item> {
+            if self.counter >= 10 {
+                return None;
+            }
+            self.counter += 1;
+            Some(self.counter - 1)
+        }
+
+        // This sort-of lies, but it's here for testing purposes.
+        // It states that the iterator has at least, just, 5 elements.
+        // This is done so we can get good code coverage and test both
+        // the optimised pre-reserve code path for `extend` and the
+        // slower dynamic re-allocation code path.
+        fn size_hint(&self) -> (usize, Option<usize>) {
+            (self.min_size_hint, None)
+        }
+    }
+
+    #[test]
+    fn test_extend() {
+        // Test the optimised with mixed pre-reserved and dynamic allocation extend paths.
+        let wma = WatermarkAllocator::new(32 * size_of::<usize>());
+        {
+            let mut vec = Vec::new_in(wma.clone());
+            vec.extend(MyIter::new(5)).unwrap();
+            assert_eq!(vec.inner.as_slice(), &[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+        }
+        assert_eq!(wma.in_use(), 0);
+
+        // Test with a fully pre-reserved path.
+        {
+            let mut vec = Vec::new_in(wma.clone());
+            vec.extend(MyIter::new(10)).unwrap();
+            assert_eq!(vec.inner.as_slice(), &[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+        }
+        assert_eq!(wma.in_use(), 0);
+
+        // Test with a fully pre-reserved path, but the `min` size_hint lies
+        // and exceeds the truth.
+        {
+            let mut vec = Vec::new_in(wma.clone());
+            vec.extend(MyIter::new(20)).unwrap();
+            assert_eq!(vec.inner.as_slice(), &[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+        }
+        assert_eq!(wma.in_use(), 0);
+
+        // The min size hint is zero, all dynamically allocated.
+        {
+            let mut vec = Vec::new_in(wma.clone());
+            vec.extend(MyIter::new(0)).unwrap();
+            assert_eq!(vec.inner.as_slice(), &[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+        }
+        assert_eq!(wma.in_use(), 0);
     }
 }
