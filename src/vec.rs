@@ -1,12 +1,12 @@
-use alloc::alloc::{Allocator, Global};
+use alloc::alloc::Allocator;
 use alloc::collections::TryReserveError;
 use alloc::vec::Vec as InnerVec;
 
-pub struct Vec<T, A: Allocator = Global> {
+pub struct Vec<T, A: Allocator> {
     inner: InnerVec<T, A>,
 }
 
-impl <T, A: Allocator> Vec<T, A> {
+impl<T, A: Allocator> Vec<T, A> {
     pub fn new_in(alloc: A) -> Self {
         Self {
             inner: InnerVec::new_in(alloc),
@@ -38,11 +38,12 @@ impl <T, A: Allocator> Vec<T, A> {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use alloc::alloc::Global;
+    use alloc::collections::TryReserveError;
     use core::alloc::{AllocError, Layout};
     use core::ptr::NonNull;
     use core::sync::atomic::{AtomicUsize, Ordering};
-    use alloc::collections::TryReserveError;
-    use super::*;
 
     struct WatermarkAllocator {
         watermark: usize,
@@ -66,8 +67,7 @@ mod tests {
                 return Err(AllocError);
             }
             let allocated = Global.allocate(layout)?;
-            let true_new_in_use = self.in_use
-                .fetch_add(layout.size(), Ordering::SeqCst);
+            let true_new_in_use = self.in_use.fetch_add(layout.size(), Ordering::SeqCst);
             unsafe {
                 if true_new_in_use > self.watermark {
                     let ptr = allocated.as_ptr() as *mut u8;
@@ -97,5 +97,4 @@ mod tests {
         let _err: TryReserveError = vec.try_push(5).unwrap_err();
         assert_eq!(vec.inner.as_slice(), &[1, 2, 3, 4]);
     }
-
 }
