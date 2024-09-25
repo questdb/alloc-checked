@@ -48,6 +48,7 @@ mod tests {
     use super::*;
     use alloc::alloc::Global;
     use alloc::collections::TryReserveError;
+    use alloc::format;
     use alloc::sync::Arc;
     use core::alloc::{AllocError, Layout};
     use core::ptr::NonNull;
@@ -114,5 +115,26 @@ mod tests {
         assert_eq!(vec.inner.capacity(), 4);
 
         let _err: TryReserveError = Vec::<i8, _>::with_capacity_in(5, wma).unwrap_err();
+    }
+
+    #[test]
+    fn test_reserve() {
+        let wma = WatermarkAllocator::new(32);
+        let mut vec: Vec<bool, _> = Vec::new_in(wma);
+        vec.reserve(32).unwrap();
+        assert_eq!(vec.inner.capacity(), 32);
+
+        let _err: TryReserveError = vec.reserve(33).unwrap_err();
+    }
+
+    #[test]
+    fn test_fmt_debug() {
+        let wma = WatermarkAllocator::new(32);
+        let mut vec = Vec::new_in(wma);
+        vec.try_push(1).unwrap();
+        vec.try_push(2).unwrap();
+        vec.try_push(3).unwrap();
+        vec.try_push(4).unwrap();
+        assert_eq!(format!("{:?}", vec), "[1, 2, 3, 4]");
     }
 }
