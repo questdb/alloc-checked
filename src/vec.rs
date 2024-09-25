@@ -119,15 +119,11 @@ impl<T: Clone, A: Allocator> Vec<T, A> {
     #[inline]
     pub fn extend_from_slice(&mut self, slice: &[T]) -> Result<(), TryReserveError> {
         self.reserve(slice.len())?;
-        // SAFETY: we just reserved space for `slice.len()` more elements.
-        unsafe {
-            let len = self.inner.len();
-            let end = self.inner.as_mut_ptr().add(len);
-            for (i, value) in slice.iter().enumerate() {
-                core::ptr::write(end.add(i), value.clone());
-            }
-            self.inner.set_len(len + slice.len());
-        }
+
+        // Yes, we re-evaluate the capacity by delegating to the inner Vec,
+        // but we also gain the optimizations available via specific implementations
+        // for anything that supports the `Copy` trait.
+        self.inner.extend_from_slice(slice);
         Ok(())
     }
 }
@@ -367,8 +363,20 @@ mod tests {
         assert_eq!(vec[3], 4);
     }
 
+    /// A type that implements `Clone` but not `Copy`.
+    #[derive(Clone, Eq, PartialEq)]
+    struct Cloneable(i32);
+
     #[test]
-    fn test_extend_from_slice() {
+    fn test_extend_from_slice_clone() {
+        let wma = WatermarkAllocator::new(32);
+        let mut vec = Vec::new_in(wma);
+        vec.extend_from_slice(&[Cloneable(1), Cloneable(2), Cloneable(3), Cloneable(4)])
+            .unwrap();
+    }
+
+    #[test]
+    fn test_extend_from_slice_copy() {
         let wma = WatermarkAllocator::new(32);
         let mut vec = Vec::new_in(wma);
         vec.extend_from_slice(&[1, 2, 3, 4]).unwrap();
