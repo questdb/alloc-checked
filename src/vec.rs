@@ -2,7 +2,7 @@ use alloc::alloc::Allocator;
 use alloc::collections::TryReserveError;
 use alloc::vec::Vec as InnerVec;
 use core::fmt::Debug;
-use core::ops::{Index, IndexMut};
+use core::ops::{Deref, DerefMut, Index, IndexMut};
 use core::slice::SliceIndex;
 
 pub struct Vec<T, A: Allocator> {
@@ -30,7 +30,7 @@ impl<T, A: Allocator> Vec<T, A> {
     }
 
     #[inline]
-    pub fn try_push(&mut self, value: T) -> Result<(), TryReserveError> {
+    pub fn push(&mut self, value: T) -> Result<(), TryReserveError> {
         self.reserve(1)?;
         // SAFETY: we just reserved space for one more element.
         unsafe {
@@ -106,6 +106,20 @@ impl<T, I: SliceIndex<[T]>, A: Allocator> IndexMut<I> for Vec<T, A> {
     }
 }
 
+impl<T, A: Allocator> Deref for Vec<T, A> {
+    type Target = [T];
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl<T, A: Allocator> DerefMut for Vec<T, A> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.inner
+    }
+}
+
 impl<T: Debug, A: Allocator> Debug for Vec<T, A> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         self.inner.fmt(f)
@@ -172,19 +186,19 @@ mod tests {
     }
 
     #[test]
-    fn test_try_push() {
+    fn test_push() {
         let wma = WatermarkAllocator::new(32);
         let mut vec = Vec::new_in(wma);
         assert_eq!(vec.len(), 0);
         assert!(vec.is_empty());
-        vec.try_push(1).unwrap();
+        vec.push(1).unwrap();
         assert_eq!(vec.len(), 1);
         assert!(!vec.is_empty());
-        vec.try_push(2).unwrap();
-        vec.try_push(3).unwrap();
-        vec.try_push(4).unwrap();
+        vec.push(2).unwrap();
+        vec.push(3).unwrap();
+        vec.push(4).unwrap();
         assert_eq!(vec.len(), 4);
-        let _err: TryReserveError = vec.try_push(5).unwrap_err();
+        let _err: TryReserveError = vec.push(5).unwrap_err();
         assert_eq!(vec.inner.as_slice(), &[1, 2, 3, 4]);
         assert_eq!(vec.len(), 4);
     }
@@ -212,10 +226,10 @@ mod tests {
     fn test_fmt_debug() {
         let wma = WatermarkAllocator::new(32);
         let mut vec = Vec::new_in(wma);
-        vec.try_push(1).unwrap();
-        vec.try_push(2).unwrap();
-        vec.try_push(3).unwrap();
-        vec.try_push(4).unwrap();
+        vec.push(1).unwrap();
+        vec.push(2).unwrap();
+        vec.push(3).unwrap();
+        vec.push(4).unwrap();
         assert_eq!(format!("{:?}", vec), "[1, 2, 3, 4]");
     }
 
@@ -223,10 +237,10 @@ mod tests {
     fn test_iter() {
         let wma = WatermarkAllocator::new(32);
         let mut vec = Vec::new_in(wma);
-        vec.try_push(1).unwrap();
-        vec.try_push(2).unwrap();
-        vec.try_push(3).unwrap();
-        vec.try_push(4).unwrap();
+        vec.push(1).unwrap();
+        vec.push(2).unwrap();
+        vec.push(3).unwrap();
+        vec.push(4).unwrap();
         let mut iter = vec.iter();
         assert_eq!(iter.next(), Some(&1));
         assert_eq!(iter.next(), Some(&2));
@@ -239,10 +253,10 @@ mod tests {
     fn test_iter_mut() {
         let wma = WatermarkAllocator::new(32);
         let mut vec = Vec::new_in(wma);
-        vec.try_push(1).unwrap();
-        vec.try_push(2).unwrap();
-        vec.try_push(3).unwrap();
-        vec.try_push(4).unwrap();
+        vec.push(1).unwrap();
+        vec.push(2).unwrap();
+        vec.push(3).unwrap();
+        vec.push(4).unwrap();
         let mut iter = vec.iter_mut();
         assert_eq!(iter.next(), Some(&mut 1));
         assert_eq!(iter.next(), Some(&mut 2));
@@ -256,10 +270,10 @@ mod tests {
         let wma = WatermarkAllocator::new(32);
         let mut vec = Vec::new_in(wma.clone());
         assert_eq!(wma.in_use(), 0);
-        vec.try_push(1).unwrap();
-        vec.try_push(2).unwrap();
-        vec.try_push(3).unwrap();
-        vec.try_push(4).unwrap();
+        vec.push(1).unwrap();
+        vec.push(2).unwrap();
+        vec.push(3).unwrap();
+        vec.push(4).unwrap();
         let ptr = vec.as_ptr();
         unsafe {
             assert_eq!(*ptr, 1);
@@ -274,12 +288,12 @@ mod tests {
         let wma = WatermarkAllocator::new(64);
         let mut vec = Vec::new_in(wma.clone());
         assert_eq!(wma.in_use(), 0);
-        vec.try_push('a').unwrap();
-        vec.try_push('b').unwrap();
-        vec.try_push('c').unwrap();
-        vec.try_push('d').unwrap();
-        vec.try_push('e').unwrap();
-        vec.try_push('f').unwrap();
+        vec.push('a').unwrap();
+        vec.push('b').unwrap();
+        vec.push('c').unwrap();
+        vec.push('d').unwrap();
+        vec.push('e').unwrap();
+        vec.push('f').unwrap();
         let ptr = vec.as_mut_ptr();
         unsafe {
             assert_eq!(*ptr, 'a');
@@ -295,10 +309,10 @@ mod tests {
     fn test_index() {
         let wma = WatermarkAllocator::new(32);
         let mut vec = Vec::new_in(wma);
-        vec.try_push(1).unwrap();
-        vec.try_push(2).unwrap();
-        vec.try_push(3).unwrap();
-        vec.try_push(4).unwrap();
+        vec.push(1).unwrap();
+        vec.push(2).unwrap();
+        vec.push(3).unwrap();
+        vec.push(4).unwrap();
         assert_eq!(vec[0], 1);
         assert_eq!(vec[1], 2);
         assert_eq!(vec[2], 3);
@@ -315,5 +329,32 @@ mod tests {
         let _err: TryReserveError = vec.extend_from_slice(&[5, 6]).unwrap_err();
 
         vec.extend_from_slice(&[]).unwrap();
+    }
+
+    #[test]
+    fn test_deref() {
+        let wma = WatermarkAllocator::new(32);
+        let mut vec = Vec::new_in(wma);
+        vec.push(1).unwrap();
+        vec.push(2).unwrap();
+        vec.push(3).unwrap();
+        vec.push(4).unwrap();
+        assert_eq!(&*vec, &[1, 2, 3, 4]);
+    }
+
+    #[test]
+    fn test_deref_mut() {
+        let wma = WatermarkAllocator::new(32);
+        let mut vec = Vec::new_in(wma);
+        vec.push(1).unwrap();
+        vec.push(2).unwrap();
+        vec.push(3).unwrap();
+        vec.push(4).unwrap();
+        let vec: &mut [i32] = &mut vec;
+        vec[0] = 5;
+        vec[1] = 6;
+        vec[2] = 7;
+        vec[3] = 8;
+        assert_eq!(&*vec, &[5, 6, 7, 8]);
     }
 }
