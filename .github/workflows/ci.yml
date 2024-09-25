@@ -10,7 +10,7 @@ on:
 
 jobs:
   lint:
-    name: Linting and Formatting (Linux)
+    name: Linting
     runs-on: ubuntu-latest
 
     steps:
@@ -34,7 +34,7 @@ jobs:
         run: cargo clippy --all-targets --features no_std -- -D warnings
 
   build_test:
-    name: Build and Test
+    name: Test
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
