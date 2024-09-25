@@ -59,6 +59,16 @@ impl<T, A: Allocator> Vec<T, A> {
     pub fn is_empty(&self) -> bool {
         self.inner.is_empty()
     }
+
+    #[inline]
+    pub fn as_ptr(&self) -> *const T {
+        self.inner.as_ptr()
+    }
+
+    #[inline]
+    pub fn as_mut_ptr(&mut self) -> *mut T {
+        self.inner.as_mut_ptr()
+    }
 }
 
 impl<T: Debug, A: Allocator> Debug for Vec<T, A> {
@@ -82,6 +92,12 @@ mod tests {
     struct WatermarkAllocator {
         watermark: usize,
         in_use: Arc<AtomicUsize>,
+    }
+
+    impl WatermarkAllocator {
+        pub(crate) fn in_use(&self) -> usize {
+            self.in_use.load(Ordering::SeqCst)
+        }
     }
 
     impl WatermarkAllocator {
@@ -198,5 +214,45 @@ mod tests {
         assert_eq!(iter.next(), Some(&mut 3));
         assert_eq!(iter.next(), Some(&mut 4));
         assert_eq!(iter.next(), None);
+    }
+
+    #[test]
+    fn test_as_ptr() {
+        let wma = WatermarkAllocator::new(32);
+        let mut vec = Vec::new_in(wma.clone());
+        assert_eq!(wma.in_use(), 0);
+        vec.try_push(1).unwrap();
+        vec.try_push(2).unwrap();
+        vec.try_push(3).unwrap();
+        vec.try_push(4).unwrap();
+        let ptr = vec.as_ptr();
+        unsafe {
+            assert_eq!(*ptr, 1);
+            assert_eq!(*ptr.add(1), 2);
+            assert_eq!(*ptr.add(2), 3);
+            assert_eq!(*ptr.add(3), 4);
+        }
+    }
+
+    #[test]
+    fn test_as_mut_ptr() {
+        let wma = WatermarkAllocator::new(64);
+        let mut vec = Vec::new_in(wma.clone());
+        assert_eq!(wma.in_use(), 0);
+        vec.try_push('a').unwrap();
+        vec.try_push('b').unwrap();
+        vec.try_push('c').unwrap();
+        vec.try_push('d').unwrap();
+        vec.try_push('e').unwrap();
+        vec.try_push('f').unwrap();
+        let ptr = vec.as_mut_ptr();
+        unsafe {
+            assert_eq!(*ptr, 'a');
+            assert_eq!(*ptr.add(1), 'b');
+            assert_eq!(*ptr.add(2), 'c');
+            assert_eq!(*ptr.add(3), 'd');
+            assert_eq!(*ptr.add(4), 'e');
+            assert_eq!(*ptr.add(5), 'f');
+        }
     }
 }
