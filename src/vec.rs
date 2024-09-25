@@ -2,6 +2,8 @@ use alloc::alloc::Allocator;
 use alloc::collections::TryReserveError;
 use alloc::vec::Vec as InnerVec;
 use core::fmt::Debug;
+use core::ops::{Index, IndexMut};
+use core::slice::SliceIndex;
 
 pub struct Vec<T, A: Allocator> {
     inner: InnerVec<T, A>,
@@ -68,6 +70,22 @@ impl<T, A: Allocator> Vec<T, A> {
     #[inline]
     pub fn as_mut_ptr(&mut self) -> *mut T {
         self.inner.as_mut_ptr()
+    }
+}
+
+impl<T, I: SliceIndex<[T]>, A: Allocator> Index<I> for Vec<T, A> {
+    type Output = I::Output;
+
+    #[inline]
+    fn index(&self, index: I) -> &Self::Output {
+        self.inner.index(index)
+    }
+}
+
+impl<T, I: SliceIndex<[T]>, A: Allocator> IndexMut<I> for Vec<T, A> {
+    #[inline]
+    fn index_mut(&mut self, index: I) -> &mut Self::Output {
+        self.inner.index_mut(index)
     }
 }
 
@@ -254,5 +272,19 @@ mod tests {
             assert_eq!(*ptr.add(4), 'e');
             assert_eq!(*ptr.add(5), 'f');
         }
+    }
+
+    #[test]
+    fn test_index() {
+        let wma = WatermarkAllocator::new(32);
+        let mut vec = Vec::new_in(wma);
+        vec.try_push(1).unwrap();
+        vec.try_push(2).unwrap();
+        vec.try_push(3).unwrap();
+        vec.try_push(4).unwrap();
+        assert_eq!(vec[0], 1);
+        assert_eq!(vec[1], 2);
+        assert_eq!(vec[2], 3);
+        assert_eq!(vec[3], 4);
     }
 }
