@@ -1,4 +1,4 @@
-#![no_std]
+#![cfg_attr(feature = "no_std", no_std)]
 #![feature(allocator_api)]
 
 extern crate alloc;
