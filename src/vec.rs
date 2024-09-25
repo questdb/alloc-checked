@@ -8,24 +8,28 @@ pub struct Vec<T, A: Allocator> {
 }
 
 impl<T, A: Allocator> Vec<T, A> {
+    #[inline]
     pub fn new_in(alloc: A) -> Self {
         Self {
             inner: InnerVec::new_in(alloc),
         }
     }
 
+    #[inline]
     pub fn reserve(&mut self, additional: usize) -> Result<(), TryReserveError> {
         self.inner.try_reserve(additional)
     }
 
+    #[inline]
     pub fn with_capacity_in(capacity: usize, alloc: A) -> Result<Self, TryReserveError> {
         let mut vec = Self::new_in(alloc);
         vec.reserve(capacity)?;
         Ok(vec)
     }
 
+    #[inline]
     pub fn try_push(&mut self, value: T) -> Result<(), TryReserveError> {
-        self.inner.try_reserve(1)?;
+        self.reserve(1)?;
         // SAFETY: we just reserved space for one more element.
         unsafe {
             let len = self.inner.len();
@@ -34,6 +38,26 @@ impl<T, A: Allocator> Vec<T, A> {
             self.inner.set_len(len + 1)
         }
         Ok(())
+    }
+
+    #[inline]
+    pub fn iter(&self) -> core::slice::Iter<'_, T> {
+        self.inner.iter()
+    }
+
+    #[inline]
+    pub fn iter_mut(&mut self) -> core::slice::IterMut<'_, T> {
+        self.inner.iter_mut()
+    }
+
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.inner.len()
+    }
+
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.inner.is_empty()
     }
 }
 
@@ -100,12 +124,18 @@ mod tests {
     fn test_try_push() {
         let wma = WatermarkAllocator::new(32);
         let mut vec = Vec::new_in(wma);
+        assert_eq!(vec.len(), 0);
+        assert!(vec.is_empty());
         vec.try_push(1).unwrap();
+        assert_eq!(vec.len(), 1);
+        assert!(!vec.is_empty());
         vec.try_push(2).unwrap();
         vec.try_push(3).unwrap();
         vec.try_push(4).unwrap();
+        assert_eq!(vec.len(), 4);
         let _err: TryReserveError = vec.try_push(5).unwrap_err();
         assert_eq!(vec.inner.as_slice(), &[1, 2, 3, 4]);
+        assert_eq!(vec.len(), 4);
     }
 
     #[test]
@@ -136,5 +166,37 @@ mod tests {
         vec.try_push(3).unwrap();
         vec.try_push(4).unwrap();
         assert_eq!(format!("{:?}", vec), "[1, 2, 3, 4]");
+    }
+
+    #[test]
+    fn test_iter() {
+        let wma = WatermarkAllocator::new(32);
+        let mut vec = Vec::new_in(wma);
+        vec.try_push(1).unwrap();
+        vec.try_push(2).unwrap();
+        vec.try_push(3).unwrap();
+        vec.try_push(4).unwrap();
+        let mut iter = vec.iter();
+        assert_eq!(iter.next(), Some(&1));
+        assert_eq!(iter.next(), Some(&2));
+        assert_eq!(iter.next(), Some(&3));
+        assert_eq!(iter.next(), Some(&4));
+        assert_eq!(iter.next(), None);
+    }
+
+    #[test]
+    fn test_iter_mut() {
+        let wma = WatermarkAllocator::new(32);
+        let mut vec = Vec::new_in(wma);
+        vec.try_push(1).unwrap();
+        vec.try_push(2).unwrap();
+        vec.try_push(3).unwrap();
+        vec.try_push(4).unwrap();
+        let mut iter = vec.iter_mut();
+        assert_eq!(iter.next(), Some(&mut 1));
+        assert_eq!(iter.next(), Some(&mut 2));
+        assert_eq!(iter.next(), Some(&mut 3));
+        assert_eq!(iter.next(), Some(&mut 4));
+        assert_eq!(iter.next(), None);
     }
 }
