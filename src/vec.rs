@@ -1,6 +1,7 @@
 use alloc::alloc::Allocator;
 use alloc::collections::TryReserveError;
 use alloc::vec::Vec as InnerVec;
+use core::fmt::Debug;
 
 pub struct Vec<T, A: Allocator> {
     inner: InnerVec<T, A>,
@@ -36,25 +37,33 @@ impl<T, A: Allocator> Vec<T, A> {
     }
 }
 
+impl<T: Debug, A: Allocator> Debug for Vec<T, A> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        self.inner.fmt(f)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use alloc::alloc::Global;
     use alloc::collections::TryReserveError;
+    use alloc::sync::Arc;
     use core::alloc::{AllocError, Layout};
     use core::ptr::NonNull;
     use core::sync::atomic::{AtomicUsize, Ordering};
 
+    #[derive(Clone)]
     struct WatermarkAllocator {
         watermark: usize,
-        in_use: AtomicUsize,
+        in_use: Arc<AtomicUsize>,
     }
 
     impl WatermarkAllocator {
         fn new(watermark: usize) -> Self {
             Self {
                 watermark,
-                in_use: AtomicUsize::new(0),
+                in_use: AtomicUsize::new(0).into(),
             }
         }
     }
@@ -87,7 +96,7 @@ mod tests {
     }
 
     #[test]
-    fn test_vec() {
+    fn test_try_push() {
         let wma = WatermarkAllocator::new(32);
         let mut vec = Vec::new_in(wma);
         vec.try_push(1).unwrap();
@@ -96,5 +105,14 @@ mod tests {
         vec.try_push(4).unwrap();
         let _err: TryReserveError = vec.try_push(5).unwrap_err();
         assert_eq!(vec.inner.as_slice(), &[1, 2, 3, 4]);
+    }
+
+    #[test]
+    fn test_with_capacity_in() {
+        let wma = WatermarkAllocator::new(32);
+        let vec: Vec<usize, _> = Vec::with_capacity_in(4, wma.clone()).unwrap();
+        assert_eq!(vec.inner.capacity(), 4);
+
+        let _err: TryReserveError = Vec::<i8, _>::with_capacity_in(5, wma).unwrap_err();
     }
 }
