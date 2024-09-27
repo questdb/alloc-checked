@@ -113,6 +113,11 @@ impl<T, A: Allocator> Vec<T, A> {
     pub fn clear(&mut self) {
         self.inner.clear();
     }
+
+    #[inline]
+    pub fn truncate(&mut self, new_len: usize) {
+        self.inner.truncate(new_len);
+    }
 }
 
 impl<T: Clone, A: Allocator> Vec<T, A> {
@@ -124,6 +129,28 @@ impl<T: Clone, A: Allocator> Vec<T, A> {
         // but we also gain the optimizations available via specific implementations
         // for anything that supports the `Copy` trait.
         self.inner.extend_from_slice(slice);
+        Ok(())
+    }
+
+    #[inline]
+    pub fn extend_with(&mut self, additional: usize, value: T) -> Result<(), TryReserveError> {
+        self.reserve(additional)?;
+        for _ in 0..additional {
+            unsafe {
+                self.unsafe_push(value.clone());
+            }
+        }
+        Ok(())
+    }
+
+    #[inline]
+    pub fn resize(&mut self, new_len: usize, value: T) -> Result<(), TryReserveError> {
+        let len = self.len();
+        if new_len > len {
+            self.extend_with(new_len - len, value)?;
+        } else {
+            self.truncate(new_len);
+        }
         Ok(())
     }
 }
@@ -484,5 +511,39 @@ mod tests {
             assert_eq!(vec.inner.as_slice(), &[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
         }
         assert_eq!(wma.in_use(), 0);
+    }
+
+    #[test]
+    fn test_truncate() {
+        let wma = WatermarkAllocator::new(32);
+        let mut vec = Vec::new_in(wma);
+        vec.push(1).unwrap();
+        vec.push(2).unwrap();
+        vec.push(3).unwrap();
+        vec.push(4).unwrap();
+        vec.truncate(2);
+        assert_eq!(vec.inner.as_slice(), &[1, 2]);
+        vec.truncate(0);
+        assert_eq!(vec.inner.as_slice(), &[]);
+    }
+
+    #[test]
+    fn test_extend_with() {
+        let wma = WatermarkAllocator::new(32);
+        let mut vec = Vec::new_in(wma);
+        vec.extend_with(3, 1).unwrap();
+        assert_eq!(vec.inner.as_slice(), &[1, 1, 1]);
+    }
+
+    #[test]
+    fn test_resize() {
+        let wma = WatermarkAllocator::new(64);
+        let mut vec = Vec::new_in(wma);
+        vec.resize(3, 1).unwrap();
+        assert_eq!(vec.inner.as_slice(), &[1, 1, 1]);
+        vec.resize(5, 2).unwrap();
+        assert_eq!(vec.inner.as_slice(), &[1, 1, 1, 2, 2]);
+        vec.resize(2, 3).unwrap();
+        assert_eq!(vec.inner.as_slice(), &[1, 1]);
     }
 }
