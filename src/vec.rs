@@ -17,6 +17,10 @@ impl<T, A: Allocator> Vec<T, A> {
         }
     }
 
+    pub fn allocator(&self) -> &A {
+        self.inner.allocator()
+    }
+
     #[inline]
     pub fn capacity(&self) -> usize {
         self.inner.capacity()
@@ -273,7 +277,7 @@ mod tests {
     #[test]
     fn test_basics() {
         let wma = WatermarkAllocator::new(32);
-        let mut vec = Vec::new_in(wma);
+        let mut vec = Vec::new_in(wma.clone());
         assert_eq!(vec.len(), 0);
         assert_eq!(vec.capacity(), 0);
         assert!(vec.is_empty());
@@ -285,6 +289,14 @@ mod tests {
         vec.push(4).unwrap();
         assert_eq!(vec.len(), 4);
         assert_eq!(vec.capacity(), 4);
+        assert_eq!(
+            wma.in_use.load(Ordering::SeqCst),
+            vec.capacity() * size_of::<i32>()
+        );
+        assert_eq!(
+            vec.allocator().in_use.load(Ordering::SeqCst),
+            vec.capacity() * size_of::<i32>()
+        );
         let _err: TryReserveError = vec.push(5).unwrap_err();
         assert_eq!(vec.as_slice(), &[1, 2, 3, 4]);
         assert_eq!(vec.len(), 4);
