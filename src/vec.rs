@@ -118,6 +118,26 @@ impl<T, A: Allocator> Vec<T, A> {
     pub fn truncate(&mut self, new_len: usize) {
         self.inner.truncate(new_len);
     }
+
+    #[inline]
+    pub fn resize_with<F: FnMut() -> T>(
+        &mut self,
+        new_len: usize,
+        mut f: F,
+    ) -> Result<(), TryReserveError> {
+        let len = self.len();
+        if new_len > len {
+            self.reserve(new_len - len)?;
+            for _ in 0..new_len - len {
+                unsafe {
+                    self.unsafe_push(f());
+                }
+            }
+        } else {
+            self.truncate(new_len);
+        }
+        Ok(())
+    }
 }
 
 impl<T: Clone, A: Allocator> Vec<T, A> {
@@ -544,6 +564,18 @@ mod tests {
         vec.resize(5, 2).unwrap();
         assert_eq!(vec.inner.as_slice(), &[1, 1, 1, 2, 2]);
         vec.resize(2, 3).unwrap();
+        assert_eq!(vec.inner.as_slice(), &[1, 1]);
+    }
+
+    #[test]
+    fn test_resize_with() {
+        let wma = WatermarkAllocator::new(64);
+        let mut vec = Vec::new_in(wma);
+        vec.resize_with(3, || 1).unwrap();
+        assert_eq!(vec.inner.as_slice(), &[1, 1, 1]);
+        vec.resize_with(5, || 2).unwrap();
+        assert_eq!(vec.inner.as_slice(), &[1, 1, 1, 2, 2]);
+        vec.resize_with(2, || 3).unwrap();
         assert_eq!(vec.inner.as_slice(), &[1, 1]);
     }
 }
