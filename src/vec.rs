@@ -22,6 +22,13 @@ impl<T, A: Allocator> Vec<T, A> {
     }
 
     #[inline]
+    pub fn try_with_capacity_in(capacity: usize, alloc: A) -> Result<Self, TryReserveError> {
+        Ok(Self {
+            inner: InnerVec::try_with_capacity_in(capacity, alloc)?,
+        })
+    }
+
+    #[inline]
     pub fn capacity(&self) -> usize {
         self.inner.capacity()
     }
@@ -543,6 +550,16 @@ mod tests {
             assert_eq!(vec.inner.as_slice(), &[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
         }
         assert_eq!(wma.in_use(), 0);
+    }
+
+    #[test]
+    fn try_with_capacity_in() {
+        let wma = WatermarkAllocator::new(64);
+        let vec: Vec<u8, _> = Vec::try_with_capacity_in(64, wma.clone()).unwrap();
+        assert_eq!(vec.len(), 0);
+        assert_eq!(vec.as_slice(), &[]);
+        assert_eq!(vec.capacity(), 64);
+        assert_eq!(wma.in_use(), 64);
     }
 
     #[test]
