@@ -139,11 +139,13 @@ impl<T, A: Allocator> Vec<T, A> {
         let len = self.len();
         if new_len > len {
             self.reserve(new_len - len)?;
-            for _ in 0..new_len - len {
+            for index in len..new_len {
                 unsafe {
-                    self.unsafe_push(f());
+                    let end = self.inner.as_mut_ptr().add(index);
+                    core::ptr::write(end, f());
                 }
             }
+            unsafe { self.inner.set_len(new_len) }
         } else {
             self.truncate(new_len);
         }
@@ -166,11 +168,15 @@ impl<T: Clone, A: Allocator> Vec<T, A> {
     #[inline]
     pub fn extend_with(&mut self, additional: usize, value: T) -> Result<(), TryReserveError> {
         self.reserve(additional)?;
-        for _ in 0..additional {
+        let len = self.inner.len();
+        let new_len = len + additional;
+        for index in len..new_len {
             unsafe {
-                self.unsafe_push(value.clone());
+                let end = self.inner.as_mut_ptr().add(index);
+                core::ptr::write(end, value.clone());
             }
         }
+        unsafe { self.inner.set_len(new_len) }
         Ok(())
     }
 
