@@ -5,6 +5,7 @@ use core::fmt::Debug;
 use core::ops::{Deref, DerefMut, Index, IndexMut};
 use core::slice::SliceIndex;
 
+#[derive(Clone)]
 pub struct Vec<T, A: Allocator> {
     inner: InnerVec<T, A>,
 }
@@ -256,6 +257,30 @@ __impl_slice_eq1! { [A: Allocator, const N: usize] Vec<T, A>, [U; N] }
 __impl_slice_eq1! { [A: Allocator, const N: usize] [T; N], Vec<U, A> }
 __impl_slice_eq1! { [A: Allocator, const N: usize] Vec<T, A>, &[U; N] }
 __impl_slice_eq1! { [A: Allocator, const N: usize] &[T; N], Vec<U, A> }
+
+impl<T, A: Allocator> AsRef<Vec<T, A>> for Vec<T, A> {
+    fn as_ref(&self) -> &Vec<T, A> {
+        self
+    }
+}
+
+impl<T, A: Allocator> AsMut<Vec<T, A>> for Vec<T, A> {
+    fn as_mut(&mut self) -> &mut Vec<T, A> {
+        self
+    }
+}
+
+impl<T, A: Allocator> AsRef<[T]> for Vec<T, A> {
+    fn as_ref(&self) -> &[T] {
+        self
+    }
+}
+
+impl<T, A: Allocator> AsMut<[T]> for Vec<T, A> {
+    fn as_mut(&mut self) -> &mut [T] {
+        self
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -760,5 +785,55 @@ mod tests {
             assert_ne!(lhs, rhs);
             assert_ne!(rhs, lhs);
         }
+    }
+
+    fn get_first_elem_vec<T: Clone, A: Allocator>(vec: impl AsRef<Vec<T, A>>) -> T {
+        let vec = vec.as_ref();
+        vec.first().unwrap().clone()
+    }
+
+    fn get_first_elem_slice<T: Clone>(slice: impl AsRef<[T]>) -> T {
+        let vec = slice.as_ref();
+        vec.first().unwrap().clone()
+    }
+
+    #[test]
+    fn test_as_ref() {
+        let wma = WatermarkAllocator::new(128);
+        let mut vec1 = Vec::new_in(wma);
+        vec1.extend(vec![1, 2, 3]).unwrap();
+        let vec2 = vec1.clone();
+
+        assert_eq!(vec1, vec2);
+        let e0vec1 = get_first_elem_vec(vec1);
+        let e0vec2 = get_first_elem_slice(vec2);
+        assert_eq!(e0vec1, 1);
+        assert_eq!(e0vec2, 1);
+    }
+
+    fn doubled_first_elem_vec(mut vec: impl AsMut<Vec<i32, WatermarkAllocator>>) -> i32 {
+        let vec = vec.as_mut();
+        vec[0] *= 2;
+        vec[0]
+    }
+
+    fn doubled_first_elem_slice(mut vec: impl AsMut<[i32]>) -> i32 {
+        let vec = vec.as_mut();
+        vec[0] *= 2;
+        vec[0]
+    }
+
+    #[test]
+    fn test_as_mut() {
+        let wma = WatermarkAllocator::new(128);
+        let mut vec1 = Vec::new_in(wma);
+        vec1.extend(vec![1, 2, 3]).unwrap();
+        let vec2 = vec1.clone();
+
+        let d0vec1 = doubled_first_elem_vec(vec1);
+        let d0vec2 = doubled_first_elem_slice(vec2);
+
+        assert_eq!(d0vec1, 2);
+        assert_eq!(d0vec2, 2);
     }
 }
