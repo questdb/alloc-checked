@@ -228,13 +228,43 @@ impl<T: Debug, A: Allocator> Debug for Vec<T, A> {
     }
 }
 
+macro_rules! __impl_slice_eq1 {
+    ([$($vars:tt)*] $lhs:ty, $rhs:ty $(where $ty:ty: $bound:ident)?) => {
+        impl<T, U, $($vars)*> PartialEq<$rhs> for $lhs
+        where
+            T: PartialEq<U>,
+            $($ty: $bound)?
+        {
+            #[inline]
+            fn eq(&self, other: &$rhs) -> bool { self[..] == other[..] }
+
+            #[allow(clippy::partialeq_ne_impl)]
+            #[inline]
+            fn ne(&self, other: &$rhs) -> bool { self[..] != other[..] }
+        }
+    }
+}
+
+__impl_slice_eq1! { [A1: Allocator, A2: Allocator] Vec<T, A1>, Vec<U, A2> }
+__impl_slice_eq1! { [A: Allocator] Vec<T, A>, &[U] }
+__impl_slice_eq1! { [A: Allocator] Vec<T, A>, &mut [U] }
+__impl_slice_eq1! { [A: Allocator] &[T], Vec<U, A> }
+__impl_slice_eq1! { [A: Allocator] &mut [T], Vec<U, A> }
+__impl_slice_eq1! { [A: Allocator] Vec<T, A>, [U] }
+__impl_slice_eq1! { [A: Allocator] [T], Vec<U, A> }
+__impl_slice_eq1! { [A: Allocator, const N: usize] Vec<T, A>, [U; N] }
+__impl_slice_eq1! { [A: Allocator, const N: usize] [T; N], Vec<U, A> }
+__impl_slice_eq1! { [A: Allocator, const N: usize] Vec<T, A>, &[U; N] }
+__impl_slice_eq1! { [A: Allocator, const N: usize] &[T; N], Vec<U, A> }
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use alloc::alloc::Global;
+    use alloc::boxed::Box;
     use alloc::collections::TryReserveError;
-    use alloc::format;
     use alloc::sync::Arc;
+    use alloc::{format, vec};
     use core::alloc::{AllocError, Layout};
     use core::ptr::NonNull;
     use core::sync::atomic::{AtomicUsize, Ordering};
@@ -579,7 +609,8 @@ mod tests {
         vec.truncate(2);
         assert_eq!(vec.inner.as_slice(), &[1, 2]);
         vec.truncate(0);
-        assert_eq!(vec.inner.as_slice(), &[]);
+        let empty: &[i32] = &[];
+        assert_eq!(vec.inner.as_slice(), empty);
     }
 
     #[test]
@@ -612,5 +643,122 @@ mod tests {
         assert_eq!(vec.inner.as_slice(), &[1, 1, 1, 2, 2]);
         vec.resize_with(2, || 3).unwrap();
         assert_eq!(vec.inner.as_slice(), &[1, 1]);
+    }
+
+    #[derive(PartialEq, Debug)]
+    struct IntWrapper(pub i32);
+
+    impl PartialEq<i32> for IntWrapper {
+        fn eq(&self, other: &i32) -> bool {
+            self.0 == *other
+        }
+    }
+
+    impl PartialEq<IntWrapper> for i32 {
+        fn eq(&self, other: &IntWrapper) -> bool {
+            self == &other.0
+        }
+    }
+
+    fn w(i: i32) -> IntWrapper {
+        IntWrapper(i)
+    }
+
+    #[test]
+    fn test_eq() {
+        let wma = WatermarkAllocator::new(64);
+
+        // __impl_slice_eq1! { [A1: Allocator, A2: Allocator] Vec<T, A1>, Vec<U, A2> }
+        {
+            let mut lhs = Vec::new_in(wma.clone());
+            let mut rhs = Vec::new_in(Global);
+
+            lhs.extend(vec![1, 2, 3]).unwrap();
+            rhs.extend(vec![w(1), w(2), w(3)]).unwrap();
+            assert_eq!(lhs, rhs);
+            assert_eq!(rhs, lhs);
+
+            rhs.push(w(4)).unwrap();
+            assert_ne!(lhs, rhs);
+            assert_ne!(rhs, lhs);
+        }
+
+        // __impl_slice_eq1! { [A: Allocator] Vec<T, A>, &[U] }
+        // __impl_slice_eq1! { [A: Allocator] &[T], Vec<U, A> }
+        {
+            let mut lhs = Vec::new_in(wma.clone());
+            lhs.extend(vec![1, 2, 3]).unwrap();
+            let rhs: &[IntWrapper] = &[w(1), w(2), w(3)];
+            assert_eq!(lhs, rhs);
+            assert_eq!(rhs, lhs);
+
+            let rhs2: &[IntWrapper] = &[w(1), w(2), w(3), w(4)];
+            assert_ne!(lhs, rhs2);
+            assert_ne!(rhs2, lhs);
+        }
+
+        // __impl_slice_eq1! { [A: Allocator] Vec<T, A>, &mut [U] }
+        // __impl_slice_eq1! { [A: Allocator] &mut [T], Vec<U, A> }
+        {
+            let mut lhs = Vec::new_in(wma.clone());
+            lhs.extend(vec![1, 2, 3]).unwrap();
+
+            let mut rhs_vec = vec![w(1), w(2), w(3)];
+            let rhs: &mut [IntWrapper] = &mut rhs_vec;
+
+            assert_eq!(lhs, rhs);
+            assert_eq!(rhs, lhs);
+
+            rhs_vec.push(w(4));
+            let rhs2: &mut [IntWrapper] = &mut rhs_vec;
+            assert_ne!(lhs, rhs2);
+            assert_ne!(rhs2, lhs);
+        }
+
+        // __impl_slice_eq1! { [A: Allocator] Vec<T, A>, [U] }
+        // __impl_slice_eq1! { [A: Allocator] [T], Vec<U, A> }
+        {
+            let mut lhs = Vec::new_in(wma.clone());
+            lhs.extend(vec![1, 2, 3]).unwrap();
+
+            let rhs: Box<[IntWrapper]> = Box::new([w(1), w(2), w(3)]);
+            assert_eq!(lhs, *rhs);
+            assert_eq!(*rhs, lhs);
+
+            let rhs2: Box<[IntWrapper]> = Box::new([w(1), w(2), w(3), w(4)]);
+            assert_ne!(lhs, *rhs2);
+            assert_ne!(*rhs2, lhs);
+        }
+
+        // __impl_slice_eq1! { [A: Allocator, const N: usize] Vec<T, A>, [U; N] }
+        // __impl_slice_eq1! { [A: Allocator, const N: usize] [T; N], Vec<U, A> }
+        {
+            let mut lhs = Vec::new_in(wma.clone());
+            lhs.extend(vec![1, 2, 3]).unwrap();
+
+            let rhs: [IntWrapper; 3] = [w(1), w(2), w(3)];
+            assert_eq!(lhs, rhs); // Compare Vec with fixed-size array
+            assert_eq!(rhs, lhs); // Compare fixed-size array with Vec
+
+            let rhs2: [IntWrapper; 4] = [w(1), w(2), w(3), w(4)];
+            assert_ne!(lhs, rhs2); // Compare Vec with longer array
+            assert_ne!(rhs2, lhs); // Compare longer array with Vec
+        }
+
+        // __impl_slice_eq1! { [A: Allocator, const N: usize] Vec<T, A>, &[U; N] }
+        // __impl_slice_eq1! { [A: Allocator, const N: usize] &[T; N], Vec<U, A> }
+        {
+            let mut lhs = Vec::new_in(wma.clone());
+            lhs.extend(vec![1, 2, 3]).unwrap();
+
+            let rhs_arr: [IntWrapper; 3] = [w(1), w(2), w(3)];
+            let rhs: &[IntWrapper; 3] = &rhs_arr;
+            assert_eq!(lhs, rhs);
+            assert_eq!(rhs, lhs);
+
+            lhs.push(4).unwrap();
+            assert_ne!(lhs, rhs);
+            assert_ne!(rhs, lhs);
+        }
     }
 }
