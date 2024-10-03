@@ -1,7 +1,13 @@
 [package]
 name = "alloc-checked"
+description = "Collections that don't panic on alloc failures"
+authors = ["Adam Cimarosti <adam@questdb.io>"]
 version = "0.1.0"
 edition = "2021"
+repository = "https://github.com/questdb/alloc-checked"
+keywords = ["alloc", "collections", "no-std", "safe-allocation", "container"]
+categories = ["data-structures", "memory-management", "no-std", "rust-patterns"]
+license = "MIT OR Apache-2.0"
 
 [package.metadata]
 rust-version = "nightly"
@@ -11,7 +17,4 @@ rustdoc-args = ["--cfg", "nightly"]
 
 [features]
 default = []
-no_std = ["hashbrown"]
-
-[dependencies]
-hashbrown = { version = "0.14", optional = true }
+no_std = []

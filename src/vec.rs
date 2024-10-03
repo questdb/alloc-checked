@@ -5,6 +5,7 @@ use core::fmt::Debug;
 use core::ops::{Deref, DerefMut, Index, IndexMut};
 use core::slice::SliceIndex;
 
+#[derive(Clone)]
 pub struct Vec<T, A: Allocator> {
     inner: InnerVec<T, A>,
 }
@@ -15,6 +16,10 @@ impl<T, A: Allocator> Vec<T, A> {
         Self {
             inner: InnerVec::new_in(alloc),
         }
+    }
+
+    pub fn allocator(&self) -> &A {
+        self.inner.allocator()
     }
 
     #[inline]
@@ -29,9 +34,9 @@ impl<T, A: Allocator> Vec<T, A> {
 
     #[inline]
     pub fn with_capacity_in(capacity: usize, alloc: A) -> Result<Self, TryReserveError> {
-        let mut vec = Self::new_in(alloc);
-        vec.reserve(capacity)?;
-        Ok(vec)
+        Ok(Self {
+            inner: InnerVec::try_with_capacity_in(capacity, alloc)?,
+        })
     }
 
     #[inline]
@@ -113,6 +118,33 @@ impl<T, A: Allocator> Vec<T, A> {
     pub fn clear(&mut self) {
         self.inner.clear();
     }
+
+    #[inline]
+    pub fn truncate(&mut self, new_len: usize) {
+        self.inner.truncate(new_len);
+    }
+
+    #[inline]
+    pub fn resize_with<F: FnMut() -> T>(
+        &mut self,
+        new_len: usize,
+        mut f: F,
+    ) -> Result<(), TryReserveError> {
+        let len = self.len();
+        if new_len > len {
+            self.reserve(new_len - len)?;
+            for index in len..new_len {
+                unsafe {
+                    let end = self.inner.as_mut_ptr().add(index);
+                    core::ptr::write(end, f());
+                }
+            }
+            unsafe { self.inner.set_len(new_len) }
+        } else {
+            self.truncate(new_len);
+        }
+        Ok(())
+    }
 }
 
 impl<T: Clone, A: Allocator> Vec<T, A> {
@@ -124,6 +156,32 @@ impl<T: Clone, A: Allocator> Vec<T, A> {
         // but we also gain the optimizations available via specific implementations
         // for anything that supports the `Copy` trait.
         self.inner.extend_from_slice(slice);
+        Ok(())
+    }
+
+    #[inline]
+    pub fn extend_with(&mut self, additional: usize, value: T) -> Result<(), TryReserveError> {
+        self.reserve(additional)?;
+        let len = self.inner.len();
+        let new_len = len + additional;
+        for index in len..new_len {
+            unsafe {
+                let end = self.inner.as_mut_ptr().add(index);
+                core::ptr::write(end, value.clone());
+            }
+        }
+        unsafe { self.inner.set_len(new_len) }
+        Ok(())
+    }
+
+    #[inline]
+    pub fn resize(&mut self, new_len: usize, value: T) -> Result<(), TryReserveError> {
+        let len = self.len();
+        if new_len > len {
+            self.extend_with(new_len - len, value)?;
+        } else {
+            self.truncate(new_len);
+        }
         Ok(())
     }
 }
@@ -164,13 +222,67 @@ impl<T: Debug, A: Allocator> Debug for Vec<T, A> {
     }
 }
 
+macro_rules! __impl_slice_eq1 {
+    ([$($vars:tt)*] $lhs:ty, $rhs:ty $(where $ty:ty: $bound:ident)?) => {
+        impl<T, U, $($vars)*> PartialEq<$rhs> for $lhs
+        where
+            T: PartialEq<U>,
+            $($ty: $bound)?
+        {
+            #[inline]
+            fn eq(&self, other: &$rhs) -> bool { self[..] == other[..] }
+
+            #[allow(clippy::partialeq_ne_impl)]
+            #[inline]
+            fn ne(&self, other: &$rhs) -> bool { self[..] != other[..] }
+        }
+    }
+}
+
+__impl_slice_eq1! { [A1: Allocator, A2: Allocator] Vec<T, A1>, Vec<U, A2> }
+__impl_slice_eq1! { [A: Allocator] Vec<T, A>, &[U] }
+__impl_slice_eq1! { [A: Allocator] Vec<T, A>, &mut [U] }
+__impl_slice_eq1! { [A: Allocator] &[T], Vec<U, A> }
+__impl_slice_eq1! { [A: Allocator] &mut [T], Vec<U, A> }
+__impl_slice_eq1! { [A: Allocator] Vec<T, A>, [U] }
+__impl_slice_eq1! { [A: Allocator] [T], Vec<U, A> }
+__impl_slice_eq1! { [A: Allocator, const N: usize] Vec<T, A>, [U; N] }
+__impl_slice_eq1! { [A: Allocator, const N: usize] [T; N], Vec<U, A> }
+__impl_slice_eq1! { [A: Allocator, const N: usize] Vec<T, A>, &[U; N] }
+__impl_slice_eq1! { [A: Allocator, const N: usize] &[T; N], Vec<U, A> }
+
+impl<T, A: Allocator> AsRef<Vec<T, A>> for Vec<T, A> {
+    fn as_ref(&self) -> &Vec<T, A> {
+        self
+    }
+}
+
+impl<T, A: Allocator> AsMut<Vec<T, A>> for Vec<T, A> {
+    fn as_mut(&mut self) -> &mut Vec<T, A> {
+        self
+    }
+}
+
+impl<T, A: Allocator> AsRef<[T]> for Vec<T, A> {
+    fn as_ref(&self) -> &[T] {
+        self
+    }
+}
+
+impl<T, A: Allocator> AsMut<[T]> for Vec<T, A> {
+    fn as_mut(&mut self) -> &mut [T] {
+        self
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use alloc::alloc::Global;
+    use alloc::boxed::Box;
     use alloc::collections::TryReserveError;
-    use alloc::format;
     use alloc::sync::Arc;
+    use alloc::{format, vec};
     use core::alloc::{AllocError, Layout};
     use core::ptr::NonNull;
     use core::sync::atomic::{AtomicUsize, Ordering};
@@ -226,7 +338,7 @@ mod tests {
     #[test]
     fn test_basics() {
         let wma = WatermarkAllocator::new(32);
-        let mut vec = Vec::new_in(wma);
+        let mut vec = Vec::new_in(wma.clone());
         assert_eq!(vec.len(), 0);
         assert_eq!(vec.capacity(), 0);
         assert!(vec.is_empty());
@@ -238,6 +350,14 @@ mod tests {
         vec.push(4).unwrap();
         assert_eq!(vec.len(), 4);
         assert_eq!(vec.capacity(), 4);
+        assert_eq!(
+            wma.in_use.load(Ordering::SeqCst),
+            vec.capacity() * size_of::<i32>()
+        );
+        assert_eq!(
+            vec.allocator().in_use.load(Ordering::SeqCst),
+            vec.capacity() * size_of::<i32>()
+        );
         let _err: TryReserveError = vec.push(5).unwrap_err();
         assert_eq!(vec.as_slice(), &[1, 2, 3, 4]);
         assert_eq!(vec.len(), 4);
@@ -251,7 +371,10 @@ mod tests {
     fn test_with_capacity_in() {
         let wma = WatermarkAllocator::new(32);
         let vec: Vec<usize, _> = Vec::with_capacity_in(4, wma.clone()).unwrap();
+        assert_eq!(vec.len(), 0);
+        assert_eq!(vec.as_slice(), &[]);
         assert_eq!(vec.inner.capacity(), 4);
+        assert_eq!(wma.in_use(), 4 * size_of::<usize>());
 
         let _err: TryReserveError = Vec::<i8, _>::with_capacity_in(5, wma).unwrap_err();
     }
@@ -484,5 +607,219 @@ mod tests {
             assert_eq!(vec.inner.as_slice(), &[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
         }
         assert_eq!(wma.in_use(), 0);
+    }
+
+    #[test]
+    fn test_truncate() {
+        let wma = WatermarkAllocator::new(32);
+        let mut vec = Vec::new_in(wma);
+        vec.push(1).unwrap();
+        vec.push(2).unwrap();
+        vec.push(3).unwrap();
+        vec.push(4).unwrap();
+        vec.truncate(2);
+        assert_eq!(vec.inner.as_slice(), &[1, 2]);
+        vec.truncate(0);
+        let empty: &[i32] = &[];
+        assert_eq!(vec.inner.as_slice(), empty);
+    }
+
+    #[test]
+    fn test_extend_with() {
+        let wma = WatermarkAllocator::new(32);
+        let mut vec = Vec::new_in(wma);
+        vec.extend_with(3, 1).unwrap();
+        assert_eq!(vec.inner.as_slice(), &[1, 1, 1]);
+    }
+
+    #[test]
+    fn test_resize() {
+        let wma = WatermarkAllocator::new(64);
+        let mut vec = Vec::new_in(wma);
+        vec.resize(3, 1).unwrap();
+        assert_eq!(vec.inner.as_slice(), &[1, 1, 1]);
+        vec.resize(5, 2).unwrap();
+        assert_eq!(vec.inner.as_slice(), &[1, 1, 1, 2, 2]);
+        vec.resize(2, 3).unwrap();
+        assert_eq!(vec.inner.as_slice(), &[1, 1]);
+    }
+
+    #[test]
+    fn test_resize_with() {
+        let wma = WatermarkAllocator::new(64);
+        let mut vec = Vec::new_in(wma);
+        vec.resize_with(3, || 1).unwrap();
+        assert_eq!(vec.inner.as_slice(), &[1, 1, 1]);
+        vec.resize_with(5, || 2).unwrap();
+        assert_eq!(vec.inner.as_slice(), &[1, 1, 1, 2, 2]);
+        vec.resize_with(2, || 3).unwrap();
+        assert_eq!(vec.inner.as_slice(), &[1, 1]);
+    }
+
+    #[derive(PartialEq, Debug)]
+    struct IntWrapper(pub i32);
+
+    impl PartialEq<i32> for IntWrapper {
+        fn eq(&self, other: &i32) -> bool {
+            self.0 == *other
+        }
+    }
+
+    impl PartialEq<IntWrapper> for i32 {
+        fn eq(&self, other: &IntWrapper) -> bool {
+            self == &other.0
+        }
+    }
+
+    fn w(i: i32) -> IntWrapper {
+        IntWrapper(i)
+    }
+
+    #[test]
+    fn test_eq() {
+        let wma = WatermarkAllocator::new(64);
+
+        // __impl_slice_eq1! { [A1: Allocator, A2: Allocator] Vec<T, A1>, Vec<U, A2> }
+        {
+            let mut lhs = Vec::new_in(wma.clone());
+            let mut rhs = Vec::new_in(Global);
+
+            lhs.extend(vec![1, 2, 3]).unwrap();
+            rhs.extend(vec![w(1), w(2), w(3)]).unwrap();
+            assert_eq!(lhs, rhs);
+            assert_eq!(rhs, lhs);
+
+            rhs.push(w(4)).unwrap();
+            assert_ne!(lhs, rhs);
+            assert_ne!(rhs, lhs);
+        }
+
+        // __impl_slice_eq1! { [A: Allocator] Vec<T, A>, &[U] }
+        // __impl_slice_eq1! { [A: Allocator] &[T], Vec<U, A> }
+        {
+            let mut lhs = Vec::new_in(wma.clone());
+            lhs.extend(vec![1, 2, 3]).unwrap();
+            let rhs: &[IntWrapper] = &[w(1), w(2), w(3)];
+            assert_eq!(lhs, rhs);
+            assert_eq!(rhs, lhs);
+
+            let rhs2: &[IntWrapper] = &[w(1), w(2), w(3), w(4)];
+            assert_ne!(lhs, rhs2);
+            assert_ne!(rhs2, lhs);
+        }
+
+        // __impl_slice_eq1! { [A: Allocator] Vec<T, A>, &mut [U] }
+        // __impl_slice_eq1! { [A: Allocator] &mut [T], Vec<U, A> }
+        {
+            let mut lhs = Vec::new_in(wma.clone());
+            lhs.extend(vec![1, 2, 3]).unwrap();
+
+            let mut rhs_vec = vec![w(1), w(2), w(3)];
+            let rhs: &mut [IntWrapper] = &mut rhs_vec;
+
+            assert_eq!(lhs, rhs);
+            assert_eq!(rhs, lhs);
+
+            rhs_vec.push(w(4));
+            let rhs2: &mut [IntWrapper] = &mut rhs_vec;
+            assert_ne!(lhs, rhs2);
+            assert_ne!(rhs2, lhs);
+        }
+
+        // __impl_slice_eq1! { [A: Allocator] Vec<T, A>, [U] }
+        // __impl_slice_eq1! { [A: Allocator] [T], Vec<U, A> }
+        {
+            let mut lhs = Vec::new_in(wma.clone());
+            lhs.extend(vec![1, 2, 3]).unwrap();
+
+            let rhs: Box<[IntWrapper]> = Box::new([w(1), w(2), w(3)]);
+            assert_eq!(lhs, *rhs);
+            assert_eq!(*rhs, lhs);
+
+            let rhs2: Box<[IntWrapper]> = Box::new([w(1), w(2), w(3), w(4)]);
+            assert_ne!(lhs, *rhs2);
+            assert_ne!(*rhs2, lhs);
+        }
+
+        // __impl_slice_eq1! { [A: Allocator, const N: usize] Vec<T, A>, [U; N] }
+        // __impl_slice_eq1! { [A: Allocator, const N: usize] [T; N], Vec<U, A> }
+        {
+            let mut lhs = Vec::new_in(wma.clone());
+            lhs.extend(vec![1, 2, 3]).unwrap();
+
+            let rhs: [IntWrapper; 3] = [w(1), w(2), w(3)];
+            assert_eq!(lhs, rhs); // Compare Vec with fixed-size array
+            assert_eq!(rhs, lhs); // Compare fixed-size array with Vec
+
+            let rhs2: [IntWrapper; 4] = [w(1), w(2), w(3), w(4)];
+            assert_ne!(lhs, rhs2); // Compare Vec with longer array
+            assert_ne!(rhs2, lhs); // Compare longer array with Vec
+        }
+
+        // __impl_slice_eq1! { [A: Allocator, const N: usize] Vec<T, A>, &[U; N] }
+        // __impl_slice_eq1! { [A: Allocator, const N: usize] &[T; N], Vec<U, A> }
+        {
+            let mut lhs = Vec::new_in(wma.clone());
+            lhs.extend(vec![1, 2, 3]).unwrap();
+
+            let rhs_arr: [IntWrapper; 3] = [w(1), w(2), w(3)];
+            let rhs: &[IntWrapper; 3] = &rhs_arr;
+            assert_eq!(lhs, rhs);
+            assert_eq!(rhs, lhs);
+
+            lhs.push(4).unwrap();
+            assert_ne!(lhs, rhs);
+            assert_ne!(rhs, lhs);
+        }
+    }
+
+    fn get_first_elem_vec<T: Clone, A: Allocator>(vec: impl AsRef<Vec<T, A>>) -> T {
+        let vec = vec.as_ref();
+        vec.first().unwrap().clone()
+    }
+
+    fn get_first_elem_slice<T: Clone>(slice: impl AsRef<[T]>) -> T {
+        let vec = slice.as_ref();
+        vec.first().unwrap().clone()
+    }
+
+    #[test]
+    fn test_as_ref() {
+        let wma = WatermarkAllocator::new(128);
+        let mut vec1 = Vec::new_in(wma);
+        vec1.extend(vec![1, 2, 3]).unwrap();
+        let vec2 = vec1.clone();
+
+        assert_eq!(vec1, vec2);
+        let e0vec1 = get_first_elem_vec(vec1);
+        let e0vec2 = get_first_elem_slice(vec2);
+        assert_eq!(e0vec1, 1);
+        assert_eq!(e0vec2, 1);
+    }
+
+    fn doubled_first_elem_vec(mut vec: impl AsMut<Vec<i32, WatermarkAllocator>>) -> i32 {
+        let vec = vec.as_mut();
+        vec[0] *= 2;
+        vec[0]
+    }
+
+    fn doubled_first_elem_slice(mut vec: impl AsMut<[i32]>) -> i32 {
+        let vec = vec.as_mut();
+        vec[0] *= 2;
+        vec[0]
+    }
+
+    #[test]
+    fn test_as_mut() {
+        let wma = WatermarkAllocator::new(128);
+        let mut vec1 = Vec::new_in(wma);
+        vec1.extend(vec![1, 2, 3]).unwrap();
+        let vec2 = vec1.clone();
+
+        let d0vec1 = doubled_first_elem_vec(vec1);
+        let d0vec2 = doubled_first_elem_slice(vec2);
+
+        assert_eq!(d0vec1, 2);
+        assert_eq!(d0vec2, 2);
     }
 }
