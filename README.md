@@ -9,7 +9,8 @@ The wrapper collection types provide two main benefits:
 
 ## Restrictions
 
-The crate requires a recent build of the Rust "nightly" compiler, as it uses the `allocator_api` feature.
+The crate requires a recent build of the Rust "nightly" compiler, as it uses the
+[`allocator_api`](https://doc.rust-lang.org/std/alloc/trait.Allocator.html) feature.
 
 ## No Std
 
@@ -22,7 +23,7 @@ When compiled in `no_std` mode, it still relies on the `alloc`, `core` crates.
 
 Add the dependency
 
-```shell
+```bash
 cargo add alloc-checked # --features no_std
 ```
 
@@ -37,8 +38,8 @@ vec.push(42)?;  // -> Result<(), TryReserveError>
 
 and fix any resulting compile errors.
 
-Along the way, you probably want to implement make it easy to bubble up allocation errors into your error handling
-logic.
+Along the way, you probably want to implement the `From` trait for your error type to make it easier to bubble up
+allocation errors.
 
 ```rust
 use alloc::AllocError;
@@ -52,7 +53,7 @@ impl From<TryReserveError> for YourErrorType { /* ... */ }
 ## Current state of the project and design philosophy
 
 We (QuestDB) are adding to this crate on a per-need basis. There's currently decent support for the `Vec` type,
-with more types to come. But contributions are quite welcome even if they extend beyond our need.
+with more types to come. Contributions are quite welcome even if they extend beyond our needs.
 
 The core design philosophy here is that it should never be possible to use this crate in a way that it silently
 allocates memory. Having a different type that can't be misused also allows for improved API ergonomics. 
@@ -60,7 +61,9 @@ allocates memory. Having a different type that can't be misused also allows for 
 As a small example, std's `Vec` has both `fn with_capacity_in(alloc: Allocator) -> Vec` and
 `fn try_with_capacity_in(alloc: Allocator) -> Result<Vec, TryReserveError>` variants.
 
-The `Vec` implementation in `alloc-checked` has a single `fn with_capacity_in(alloc: Allocator) -> Vec`.
+The `Vec` implementation in `alloc-checked` has a single `fn with_capacity_in(alloc: Allocator) -> Vec`,
+likewise many common methods that silently panic in the standard library, here return a `Result` instead with the idea
+of an easier code migration.
 
 ## License
 
