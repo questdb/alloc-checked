@@ -11,7 +11,5 @@ rustdoc-args = ["--cfg", "nightly"]
 
 [features]
 default = []
-no_std = ["hashbrown"]
+no_std = []
 
-[dependencies]
-hashbrown = { version = "0.14", optional = true }
