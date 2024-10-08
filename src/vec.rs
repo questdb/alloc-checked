@@ -186,7 +186,7 @@ impl<T: Clone, A: Allocator> Vec<T, A> {
     }
 }
 
-impl<T: Clone, A: Allocator + Clone> TryClone for Vec<T, A> {
+impl<T: Copy, A: Allocator + Clone> TryClone for Vec<T, A> {
     type Error = TryReserveError;
 
     fn try_clone(&self) -> Result<Self, Self::Error> {
