@@ -5,5 +5,6 @@
 extern crate alloc;
 extern crate core;
 
+mod claim;
 pub mod try_clone;
 pub mod vec;

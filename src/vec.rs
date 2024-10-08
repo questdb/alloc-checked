@@ -1,3 +1,4 @@
+use crate::claim::Claim;
 use crate::try_clone::TryClone;
 use alloc::alloc::Allocator;
 use alloc::collections::TryReserveError;
@@ -147,7 +148,7 @@ impl<T, A: Allocator> Vec<T, A> {
     }
 }
 
-impl<T: Clone, A: Allocator> Vec<T, A> {
+impl<T: Claim, A: Allocator> Vec<T, A> {
     #[inline]
     pub fn extend_from_slice(&mut self, slice: &[T]) -> Result<(), TryReserveError> {
         self.reserve(slice.len())?;
@@ -186,7 +187,7 @@ impl<T: Clone, A: Allocator> Vec<T, A> {
     }
 }
 
-impl<T: Copy, A: Allocator + Clone> TryClone for Vec<T, A> {
+impl<T: Claim, A: Allocator + Claim> TryClone for Vec<T, A> {
     type Error = TryReserveError;
 
     fn try_clone(&self) -> Result<Self, Self::Error> {
@@ -288,6 +289,7 @@ impl<T, A: Allocator> AsMut<[T]> for Vec<T, A> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::claim::Claim;
     use alloc::alloc::Global;
     use alloc::boxed::Box;
     use alloc::collections::TryReserveError;
@@ -302,6 +304,8 @@ mod tests {
         watermark: usize,
         in_use: Arc<AtomicUsize>,
     }
+
+    impl Claim for WatermarkAllocator {}
 
     impl WatermarkAllocator {
         pub(crate) fn in_use(&self) -> usize {
@@ -496,15 +500,17 @@ mod tests {
         assert_eq!(vec[3], 4);
     }
 
-    /// A type that implements `Clone` but not `Copy`.
+    /// A type that implements `Clone` and `Claim`, but not `Copy`.
     #[derive(Clone, Eq, PartialEq)]
-    struct Cloneable(i32);
+    struct Claimable(i32);
+
+    impl Claim for Claimable {}
 
     #[test]
     fn test_extend_from_slice_clone() {
         let wma = WatermarkAllocator::new(32);
         let mut vec = Vec::new_in(wma);
-        vec.extend_from_slice(&[Cloneable(1), Cloneable(2), Cloneable(3), Cloneable(4)])
+        vec.extend_from_slice(&[Claimable(1), Claimable(2), Claimable(3), Claimable(4)])
             .unwrap();
     }
 
@@ -783,12 +789,12 @@ mod tests {
         }
     }
 
-    fn get_first_elem_vec<T: Clone, A: Allocator>(vec: impl AsRef<Vec<T, A>>) -> T {
+    fn get_first_elem_vec<T: Claim, A: Allocator>(vec: impl AsRef<Vec<T, A>>) -> T {
         let vec = vec.as_ref();
         vec.first().unwrap().clone()
     }
 
-    fn get_first_elem_slice<T: Clone>(slice: impl AsRef<[T]>) -> T {
+    fn get_first_elem_slice<T: Claim>(slice: impl AsRef<[T]>) -> T {
         let vec = slice.as_ref();
         vec.first().unwrap().clone()
     }
