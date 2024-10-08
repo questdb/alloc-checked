@@ -1,3 +1,4 @@
+use crate::try_clone::TryClone;
 use alloc::alloc::Allocator;
 use alloc::collections::TryReserveError;
 use alloc::vec::Vec as InnerVec;
@@ -5,7 +6,6 @@ use core::fmt::Debug;
 use core::ops::{Deref, DerefMut, Index, IndexMut};
 use core::slice::SliceIndex;
 
-#[derive(Clone)]
 pub struct Vec<T, A: Allocator> {
     inner: InnerVec<T, A>,
 }
@@ -186,6 +186,16 @@ impl<T: Clone, A: Allocator> Vec<T, A> {
     }
 }
 
+impl<T: Clone, A: Allocator + Clone> TryClone for Vec<T, A> {
+    type Error = TryReserveError;
+
+    fn try_clone(&self) -> Result<Self, Self::Error> {
+        let mut cloned = Self::with_capacity_in(self.len(), self.allocator().clone())?;
+        cloned.extend_from_slice(self.inner.as_slice())?;
+        Ok(cloned)
+    }
+}
+
 impl<T, I: SliceIndex<[T]>, A: Allocator> Index<I> for Vec<T, A> {
     type Output = I::Output;
 
@@ -316,7 +326,7 @@ mod tests {
                 return Err(AllocError);
             }
             let allocated = Global.allocate(layout)?;
-            let true_new_in_use = self.in_use.fetch_add(layout.size(), Ordering::SeqCst);
+            let true_new_in_use = self.in_use.fetch_add(allocated.len(), Ordering::SeqCst);
             unsafe {
                 if true_new_in_use > self.watermark {
                     let ptr = allocated.as_ptr() as *mut u8;
@@ -788,7 +798,7 @@ mod tests {
         let wma = WatermarkAllocator::new(128);
         let mut vec1 = Vec::new_in(wma);
         vec1.extend(vec![1, 2, 3]).unwrap();
-        let vec2 = vec1.clone();
+        let vec2 = vec1.try_clone().unwrap();
 
         assert_eq!(vec1, vec2);
         let e0vec1 = get_first_elem_vec(vec1);
@@ -814,12 +824,24 @@ mod tests {
         let wma = WatermarkAllocator::new(128);
         let mut vec1 = Vec::new_in(wma);
         vec1.extend(vec![1, 2, 3]).unwrap();
-        let vec2 = vec1.clone();
+        let vec2 = vec1.try_clone().unwrap();
+        assert_eq!(vec1, vec2);
 
         let d0vec1 = doubled_first_elem_vec(vec1);
         let d0vec2 = doubled_first_elem_slice(vec2);
 
         assert_eq!(d0vec1, 2);
         assert_eq!(d0vec2, 2);
+    }
+
+    #[test]
+    fn test_try_clone() {
+        let wma = WatermarkAllocator::new(64);
+        let mut vec1 = Vec::new_in(wma.clone());
+        vec1.extend([1usize, 2, 3, 4, 5, 6, 7, 8]).unwrap();
+        assert_eq!(vec1.len(), 8);
+        assert_eq!(vec1.capacity(), 8);
+        assert_eq!(wma.in_use(), 64);
+        assert!(vec1.try_clone().is_err());
     }
 }
