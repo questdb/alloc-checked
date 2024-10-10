@@ -14,23 +14,21 @@ pub trait Claim: Clone {}
 
 // Anything which is trivially copiable is automatically infallible
 // We need to list these out since the compiler will not allow us to `impl <T: Copy> impl Claim {}`
-impl Claim for () {}
-impl Claim for u8 {}
-impl Claim for u16 {}
-impl Claim for u32 {}
-impl Claim for u64 {}
-impl Claim for u128 {}
-impl Claim for usize {}
-impl Claim for i8 {}
-impl Claim for i16 {}
-impl Claim for i32 {}
-impl Claim for i64 {}
-impl Claim for i128 {}
-impl Claim for isize {}
-impl Claim for f32 {}
-impl Claim for f64 {}
-impl Claim for bool {}
-impl Claim for char {}
+macro_rules! impl_claim_for {
+    ($($t:ty),*) => {
+        $(
+            impl Claim for $t {}
+        )*
+    };
+}
+
+// Generate impls for simple types
+impl_claim_for! {
+    (), u8, u16, u32, u64, u128, usize,
+    i8, i16, i32, i64, i128, isize,
+    f32, f64, bool, char
+}
+
 impl<T: ?Sized> Claim for *const T {}
 impl<T: ?Sized> Claim for *mut T {}
 impl<T: Copy, const N: usize> Claim for [T; N] {}
