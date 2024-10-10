@@ -2,7 +2,7 @@
 name = "alloc-checked"
 description = "Collections that don't panic on alloc failures"
 authors = ["Adam Cimarosti <adam@questdb.io>"]
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 repository = "https://github.com/questdb/alloc-checked"
 keywords = ["alloc", "collections", "no-std", "safe-allocation", "container"]
