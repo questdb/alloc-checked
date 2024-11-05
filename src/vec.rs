@@ -290,64 +290,11 @@ impl<T, A: Allocator> AsMut<[T]> for Vec<T, A> {
 mod tests {
     use super::*;
     use crate::claim::Claim;
+    use crate::test_util::WatermarkAllocator;
     use alloc::alloc::Global;
     use alloc::boxed::Box;
     use alloc::collections::TryReserveError;
-    use alloc::sync::Arc;
     use alloc::{format, vec};
-    use core::alloc::{AllocError, Layout};
-    use core::ptr::NonNull;
-    use core::sync::atomic::{AtomicUsize, Ordering};
-
-    #[derive(Clone)]
-    struct WatermarkAllocator {
-        watermark: usize,
-        in_use: Arc<AtomicUsize>,
-    }
-
-    impl Claim for WatermarkAllocator {}
-
-    impl WatermarkAllocator {
-        pub(crate) fn in_use(&self) -> usize {
-            self.in_use.load(Ordering::SeqCst)
-        }
-    }
-
-    impl WatermarkAllocator {
-        fn new(watermark: usize) -> Self {
-            Self {
-                watermark,
-                in_use: AtomicUsize::new(0).into(),
-            }
-        }
-    }
-
-    unsafe impl Allocator for WatermarkAllocator {
-        fn allocate(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
-            let current_in_use = self.in_use.load(Ordering::SeqCst);
-            let new_in_use = current_in_use + layout.size();
-            if new_in_use > self.watermark {
-                return Err(AllocError);
-            }
-            let allocated = Global.allocate(layout)?;
-            let true_new_in_use = self.in_use.fetch_add(allocated.len(), Ordering::SeqCst);
-            unsafe {
-                if true_new_in_use > self.watermark {
-                    let ptr = allocated.as_ptr() as *mut u8;
-                    let to_dealloc = NonNull::new_unchecked(ptr);
-                    Global.deallocate(to_dealloc, layout);
-                    Err(AllocError)
-                } else {
-                    Ok(allocated)
-                }
-            }
-        }
-
-        unsafe fn deallocate(&self, ptr: NonNull<u8>, layout: Layout) {
-            Global.deallocate(ptr, layout);
-            self.in_use.fetch_sub(layout.size(), Ordering::SeqCst);
-        }
-    }
 
     #[test]
     fn test_basics() {
@@ -364,14 +311,8 @@ mod tests {
         vec.push(4).unwrap();
         assert_eq!(vec.len(), 4);
         assert_eq!(vec.capacity(), 4);
-        assert_eq!(
-            wma.in_use.load(Ordering::SeqCst),
-            vec.capacity() * size_of::<i32>()
-        );
-        assert_eq!(
-            vec.allocator().in_use.load(Ordering::SeqCst),
-            vec.capacity() * size_of::<i32>()
-        );
+        assert_eq!(wma.in_use(), vec.capacity() * size_of::<i32>());
+        assert_eq!(vec.allocator().in_use(), vec.capacity() * size_of::<i32>());
         let _err: TryReserveError = vec.push(5).unwrap_err();
         assert_eq!(vec.as_slice(), &[1, 2, 3, 4]);
         assert_eq!(vec.len(), 4);
