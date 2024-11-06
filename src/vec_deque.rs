@@ -3,7 +3,6 @@ use crate::try_clone::TryClone;
 use alloc::collections::vec_deque::{Drain, VecDeque as InnerVecDeque};
 use alloc::collections::vec_deque::{Iter, IterMut};
 use alloc::collections::TryReserveError;
-use alloc::vec::Vec;
 use core::alloc::Allocator;
 use core::ops::RangeBounds;
 
@@ -21,9 +20,7 @@ impl<T, A: Allocator> VecDeque<T, A> {
 
     #[inline]
     pub fn with_capacity_in(capacity: usize, alloc: A) -> Result<Self, TryReserveError> {
-        let backing = Vec::try_with_capacity_in(capacity, alloc)?;
-        let inner = backing.into();
-        Ok(Self { inner })
+        Ok(crate::vec::Vec::with_capacity_in(capacity, alloc)?.into())
     }
 
     #[inline]
@@ -187,10 +184,19 @@ impl<T: Claim, A: Allocator + Claim> TryClone for VecDeque<T, A> {
     }
 }
 
+impl<T, A: Allocator> From<crate::vec::Vec<T, A>> for VecDeque<T, A> {
+    fn from(vec: crate::vec::Vec<T, A>) -> Self {
+        let vec_inner = vec.into_inner();
+        let inner = vec_inner.into();
+        Self { inner }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::test_util::WatermarkAllocator;
+    use alloc::vec::Vec as InnerVec;
 
     #[test]
     fn test_new_in() {
@@ -364,7 +370,7 @@ mod tests {
         deque.push_back(2).unwrap();
         deque.push_back(3).unwrap();
 
-        let values: Vec<_> = deque.iter().cloned().collect();
+        let values: InnerVec<_> = deque.iter().cloned().collect();
         assert_eq!(values, [1, 2, 3]);
     }
 
@@ -379,7 +385,7 @@ mod tests {
         for value in deque.iter_mut() {
             *value *= 2;
         }
-        let values: Vec<_> = deque.iter().cloned().collect();
+        let values: InnerVec<_> = deque.iter().cloned().collect();
         assert_eq!(values, [2, 4, 6]);
     }
 
@@ -392,7 +398,7 @@ mod tests {
         deque.push_back(30).unwrap();
         deque.push_back(40).unwrap();
 
-        let values: Vec<_> = deque.range(1..3).cloned().collect();
+        let values: InnerVec<_> = deque.range(1..3).cloned().collect();
         assert_eq!(values, [20, 30]);
     }
 
@@ -407,7 +413,7 @@ mod tests {
         for value in deque.range_mut(1..3) {
             *value += 10;
         }
-        let values: Vec<_> = deque.iter().cloned().collect();
+        let values: InnerVec<_> = deque.iter().cloned().collect();
         assert_eq!(values, [5, 20, 25]);
     }
 
@@ -420,7 +426,7 @@ mod tests {
         deque.push_back(3).unwrap();
         deque.push_back(4).unwrap();
 
-        let drained: Vec<_> = deque.drain(1..3).collect();
+        let drained: InnerVec<_> = deque.drain(1..3).collect();
         assert_eq!(drained, [2, 3]);
         assert_eq!(deque.len(), 2);
         assert_eq!(deque.get(1), Some(&4));
@@ -536,8 +542,8 @@ mod tests {
         let cloned = cloned.unwrap();
         assert_eq!(cloned.len(), deque.len());
         assert_eq!(
-            cloned.iter().collect::<Vec<_>>(),
-            deque.iter().collect::<Vec<_>>()
+            cloned.iter().collect::<InnerVec<_>>(),
+            deque.iter().collect::<InnerVec<_>>()
         );
     }
 
@@ -582,8 +588,8 @@ mod tests {
         // Check that the target now matches the original.
         assert_eq!(target.len(), original.len());
         assert_eq!(
-            target.iter().collect::<Vec<_>>(),
-            original.iter().collect::<Vec<_>>()
+            target.iter().collect::<InnerVec<_>>(),
+            original.iter().collect::<InnerVec<_>>()
         );
     }
 }
