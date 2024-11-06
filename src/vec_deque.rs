@@ -189,6 +189,8 @@ impl<T: Claim, A: Allocator + Claim> TryClone for VecDeque<T, A> {
 
 #[cfg(test)]
 mod tests {
+    use alloc::boxed::Box;
+    use alloc::string::String;
     use super::*;
     use crate::test_util::WatermarkAllocator;
 
