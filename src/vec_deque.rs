@@ -535,7 +535,10 @@ mod tests {
         assert!(cloned.is_ok());
         let cloned = cloned.unwrap();
         assert_eq!(cloned.len(), deque.len());
-        assert_eq!(cloned.iter().collect::<Vec<_>>(), deque.iter().collect::<Vec<_>>());
+        assert_eq!(
+            cloned.iter().collect::<Vec<_>>(),
+            deque.iter().collect::<Vec<_>>()
+        );
     }
 
     #[test]
@@ -578,6 +581,9 @@ mod tests {
 
         // Check that the target now matches the original.
         assert_eq!(target.len(), original.len());
-        assert_eq!(target.iter().collect::<Vec<_>>(), original.iter().collect::<Vec<_>>());
+        assert_eq!(
+            target.iter().collect::<Vec<_>>(),
+            original.iter().collect::<Vec<_>>()
+        );
     }
 }
