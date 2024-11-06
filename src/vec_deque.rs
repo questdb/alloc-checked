@@ -342,4 +342,242 @@ mod tests {
         let cloned = deque.try_clone();
         assert!(cloned.is_err());
     }
+
+    #[test]
+    fn test_get_mut() {
+        let alloc = WatermarkAllocator::new(128);
+        let mut deque = VecDeque::new_in(alloc.clone());
+        deque.push_back(1).unwrap();
+        deque.push_back(2).unwrap();
+
+        if let Some(value) = deque.get_mut(1) {
+            *value = 3;
+        }
+        assert_eq!(deque.get(1), Some(&3));
+    }
+
+    #[test]
+    fn test_iter() {
+        let alloc = WatermarkAllocator::new(128);
+        let mut deque = VecDeque::new_in(alloc.clone());
+        deque.push_back(1).unwrap();
+        deque.push_back(2).unwrap();
+        deque.push_back(3).unwrap();
+
+        let values: Vec<_> = deque.iter().cloned().collect();
+        assert_eq!(values, [1, 2, 3]);
+    }
+
+    #[test]
+    fn test_iter_mut() {
+        let alloc = WatermarkAllocator::new(128);
+        let mut deque = VecDeque::new_in(alloc.clone());
+        deque.push_back(1).unwrap();
+        deque.push_back(2).unwrap();
+        deque.push_back(3).unwrap();
+
+        for value in deque.iter_mut() {
+            *value *= 2;
+        }
+        let values: Vec<_> = deque.iter().cloned().collect();
+        assert_eq!(values, [2, 4, 6]);
+    }
+
+    #[test]
+    fn test_range() {
+        let alloc = WatermarkAllocator::new(128);
+        let mut deque = VecDeque::new_in(alloc.clone());
+        deque.push_back(10).unwrap();
+        deque.push_back(20).unwrap();
+        deque.push_back(30).unwrap();
+        deque.push_back(40).unwrap();
+
+        let values: Vec<_> = deque.range(1..3).cloned().collect();
+        assert_eq!(values, [20, 30]);
+    }
+
+    #[test]
+    fn test_range_mut() {
+        let alloc = WatermarkAllocator::new(128);
+        let mut deque = VecDeque::new_in(alloc.clone());
+        deque.push_back(5).unwrap();
+        deque.push_back(10).unwrap();
+        deque.push_back(15).unwrap();
+
+        for value in deque.range_mut(1..3) {
+            *value += 10;
+        }
+        let values: Vec<_> = deque.iter().cloned().collect();
+        assert_eq!(values, [5, 20, 25]);
+    }
+
+    #[test]
+    fn test_drain() {
+        let alloc = WatermarkAllocator::new(128);
+        let mut deque = VecDeque::new_in(alloc.clone());
+        deque.push_back(1).unwrap();
+        deque.push_back(2).unwrap();
+        deque.push_back(3).unwrap();
+        deque.push_back(4).unwrap();
+
+        let drained: Vec<_> = deque.drain(1..3).collect();
+        assert_eq!(drained, [2, 3]);
+        assert_eq!(deque.len(), 2);
+        assert_eq!(deque.get(1), Some(&4));
+    }
+
+    #[test]
+    fn test_clear() {
+        let alloc = WatermarkAllocator::new(128);
+        let mut deque = VecDeque::new_in(alloc.clone());
+        deque.push_back(1).unwrap();
+        deque.push_back(2).unwrap();
+
+        deque.clear();
+        assert!(deque.is_empty());
+        assert_eq!(deque.len(), 0);
+    }
+
+    #[test]
+    fn test_contains() {
+        let alloc = WatermarkAllocator::new(128);
+        let mut deque = VecDeque::new_in(alloc.clone());
+        deque.push_back(42).unwrap();
+        deque.push_back(99).unwrap();
+
+        assert!(deque.contains(&42));
+        assert!(!deque.contains(&1));
+    }
+
+    #[test]
+    fn test_front_mut() {
+        let alloc = WatermarkAllocator::new(128);
+        let mut deque = VecDeque::new_in(alloc.clone());
+        deque.push_back(5).unwrap();
+        deque.push_back(10).unwrap();
+
+        if let Some(value) = deque.front_mut() {
+            *value = 7;
+        }
+        assert_eq!(deque.front(), Some(&7));
+    }
+
+    #[test]
+    fn test_back_mut() {
+        let alloc = WatermarkAllocator::new(128);
+        let mut deque = VecDeque::new_in(alloc.clone());
+        deque.push_back(5).unwrap();
+        deque.push_back(10).unwrap();
+
+        if let Some(value) = deque.back_mut() {
+            *value = 15;
+        }
+        assert_eq!(deque.back(), Some(&15));
+    }
+
+    #[test]
+    fn test_pop_front() {
+        let alloc = WatermarkAllocator::new(128);
+        let mut deque = VecDeque::new_in(alloc.clone());
+        deque.push_back(1).unwrap();
+        deque.push_back(2).unwrap();
+
+        assert_eq!(deque.pop_front(), Some(1));
+        assert_eq!(deque.pop_front(), Some(2));
+        assert!(deque.is_empty());
+    }
+
+    #[test]
+    fn test_pop_back() {
+        let alloc = WatermarkAllocator::new(128);
+        let mut deque = VecDeque::new_in(alloc.clone());
+        deque.push_back(3).unwrap();
+        deque.push_back(4).unwrap();
+
+        assert_eq!(deque.pop_back(), Some(4));
+        assert_eq!(deque.pop_back(), Some(3));
+        assert!(deque.is_empty());
+    }
+
+    #[test]
+    fn test_make_contiguous() {
+        let alloc = WatermarkAllocator::new(128);
+        let mut deque = VecDeque::new_in(alloc.clone());
+
+        // Alternate between front and back pushes to create a discontinuous buffer.
+        deque.push_back(1).unwrap();
+        deque.push_front(2).unwrap();
+        deque.push_back(3).unwrap();
+        deque.push_front(4).unwrap();
+        deque.push_back(5).unwrap();
+
+        // Calling make_contiguous should arrange elements in a contiguous slice.
+        let slice = deque.make_contiguous();
+
+        // Verify the order matches the intended sequence as if the buffer were continuous.
+        assert_eq!(slice, &[4, 2, 1, 3, 5]);
+    }
+
+    #[test]
+    fn test_try_clone_success() {
+        let alloc = WatermarkAllocator::new(128);
+        let mut deque = VecDeque::new_in(alloc.clone());
+
+        // Populate the deque with some elements.
+        deque.push_back(1).unwrap();
+        deque.push_back(2).unwrap();
+        deque.push_back(3).unwrap();
+
+        // Attempt to clone the deque.
+        let cloned = deque.try_clone();
+
+        // Verify the clone was successful and matches the original.
+        assert!(cloned.is_ok());
+        let cloned = cloned.unwrap();
+        assert_eq!(cloned.len(), deque.len());
+        assert_eq!(cloned.iter().collect::<Vec<_>>(), deque.iter().collect::<Vec<_>>());
+    }
+
+    #[test]
+    fn test_try_clone_failure() {
+        // Set a low watermark to trigger allocation failure during cloning.
+        let alloc = WatermarkAllocator::new(16); // Low watermark for small allocations.
+        let mut deque = VecDeque::new_in(alloc.clone());
+
+        // Fill deque so it requires more allocation on cloning.
+        deque.push_back(1).unwrap();
+        deque.push_back(2).unwrap();
+        deque.push_back(3).unwrap();
+        deque.push_back(4).unwrap();
+
+        // Attempt to clone the deque. Expect an error due to allocation limit.
+        let cloned = deque.try_clone();
+        assert!(cloned.is_err());
+    }
+
+    #[test]
+    fn test_try_clone_from_success() {
+        let alloc = WatermarkAllocator::new(128);
+        let mut original = VecDeque::new_in(alloc.clone());
+
+        // Populate the original deque with some elements.
+        original.push_back(1).unwrap();
+        original.push_back(2).unwrap();
+        original.push_back(3).unwrap();
+
+        // Create a target deque with different contents to clone into.
+        let mut target = VecDeque::new_in(alloc.clone());
+        target.push_back(10).unwrap();
+        target.push_back(20).unwrap();
+
+        // Use try_clone_from to clone from the original deque into the target.
+        let result = target.try_clone_from(&original);
+
+        // Verify that the clone was successful.
+        assert!(result.is_ok());
+
+        // Check that the target now matches the original.
+        assert_eq!(target.len(), original.len());
+        assert_eq!(target.iter().collect::<Vec<_>>(), original.iter().collect::<Vec<_>>());
+    }
 }
