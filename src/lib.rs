@@ -8,3 +8,6 @@ extern crate core;
 pub mod claim;
 pub mod try_clone;
 pub mod vec;
+
+#[cfg(feature = "hash_collections")]
+pub mod hash;
