@@ -290,8 +290,8 @@ impl<T, A: Allocator> AsMut<[T]> for Vec<T, A> {
 mod tests {
     use super::*;
     use crate::claim::Claim;
-    use crate::testing::{WatermarkAllocator, WatermarkAllocator2};
     use crate::testing::{AllowGlobalAllocGuard, NoGlobalAllocGuard};
+    use crate::testing::{WatermarkAllocator, WatermarkAllocator2};
     use alloc::boxed::Box;
     use alloc::collections::TryReserveError;
     use alloc::{format, vec};
