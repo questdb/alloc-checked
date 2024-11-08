@@ -1,7 +1,7 @@
 use crate::claim::Claim;
 use core::alloc::Allocator;
 use core::hash::{BuildHasher, Hash};
-pub use hashbrown::hash_map::{Keys, Values, ValuesMut, Iter, IterMut};
+pub use hashbrown::hash_map::{Iter, IterMut, Keys, Values, ValuesMut};
 pub use hashbrown::DefaultHashBuilder;
 use hashbrown::{HashMap as InnerHashMap, TryReserveError};
 
@@ -104,4 +104,3 @@ where
     //     self.inner.remove(k)
     // }
 }
-

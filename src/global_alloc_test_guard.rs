@@ -1,52 +1,73 @@
 use std::alloc::{GlobalAlloc, Layout, System};
-use std::sync::Mutex;
-use heapless::Vec;
-use std::thread::{self, ThreadId};
 
-static NO_ALLOC_THREADS: Mutex<Vec<ThreadId, 128>> = Mutex::new(Vec::new());
+thread_local! {
+    static GLOBAL_ALLOC_ALLOWED: std::cell::RefCell<bool> = std::cell::RefCell::new(true);
+}
 
-pub struct NoGlobalAllocGuard {}
+struct NoPubCtor;
+
+/// A guard that temporarily error if a test performs global allocation in the current thread.
+pub struct NoGlobalAllocGuard(NoPubCtor);
 
 impl NoGlobalAllocGuard {
     pub fn new() -> Self {
-        let tid = thread::current().id();
+        GLOBAL_ALLOC_ALLOWED.with(|alloc_allowed| {
+            let mut alloc_allowed = alloc_allowed.borrow_mut();
+            if !*alloc_allowed {
+                panic!("NoGlobalAllocGuard is not re-entrant.");
+            }
+            *alloc_allowed = false; // Disable global allocation
+        });
 
-        let mut vec = NO_ALLOC_THREADS.lock()
-            .expect("NO_ALLOC_THREADS lockable");
-
-        if vec.contains(&tid) {
-            panic!("NoGlobalAllocGuard is not re-entrant");
-        }
-
-        vec.push(tid).expect("NO_ALLOC_THREADS capacity exceeded");
-
-        Self {}
+        Self(NoPubCtor)
     }
 }
 
 impl Drop for NoGlobalAllocGuard {
     fn drop(&mut self) {
-        let mut vec = NO_ALLOC_THREADS.lock()
-            .expect("NO_ALLOC_THREADS lockable");
-
-        let tid = thread::current().id();
-        let idx = vec
-            .iter()
-            .position(|recorded_tid| tid == *recorded_tid)
-            .expect("unmatched thread ID");
-
-        vec.remove(idx);
+        GLOBAL_ALLOC_ALLOWED.with(|alloc_allowed| {
+            let mut alloc_allowed = alloc_allowed.borrow_mut();
+            *alloc_allowed = true;
+        });
     }
 }
 
+pub struct AllowNextGlobalAllocGuard {
+    was_allowed: bool,
+}
+
+impl AllowNextGlobalAllocGuard {
+    pub fn new() -> Self {
+        let was_allowed = GLOBAL_ALLOC_ALLOWED.with(|alloc_allowed| {
+            let was_allowed = *alloc_allowed.borrow();
+            if !was_allowed {
+                let mut alloc_allowed = alloc_allowed.borrow_mut();
+                *alloc_allowed = true;
+            }
+            was_allowed
+        });
+
+        Self { was_allowed }
+    }
+}
+
+impl Drop for AllowNextGlobalAllocGuard {
+    fn drop(&mut self) {
+        GLOBAL_ALLOC_ALLOWED.with(|alloc_allowed| {
+            let mut alloc_allowed = alloc_allowed.borrow_mut();
+            *alloc_allowed = self.was_allowed;
+        });
+    }
+}
+
+/// Enables the `NoGlobalAllocGuard` by acting as a global allocator.
 pub struct GlobalAllocTestGuardAllocator;
 
 impl GlobalAllocTestGuardAllocator {
     fn is_allowed(&self) -> bool {
-        let tid = thread::current().id();
-        let vec = NO_ALLOC_THREADS.lock()
-            .expect("NO_ALLOC_THREADS lockable");
-        !vec.contains(&tid)
+        GLOBAL_ALLOC_ALLOWED.with(|alloc_allowed| {
+            *alloc_allowed.borrow() // Check if allocation is allowed for the current thread
+        })
     }
 
     fn guard(&self) {
@@ -64,7 +85,7 @@ unsafe impl GlobalAlloc for GlobalAllocTestGuardAllocator {
 
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
         self.guard();
-        System.dealloc(ptr, layout);
+        System.dealloc(ptr, layout)
     }
 
     unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {

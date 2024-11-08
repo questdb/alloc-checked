@@ -15,7 +15,7 @@ pub mod hash;
 #[cfg(test)]
 pub(crate) mod global_alloc_test_guard;
 
-
 #[cfg(test)]
 #[global_allocator]
-static GLOBAL: global_alloc_test_guard::GlobalAllocTestGuardAllocator = global_alloc_test_guard::GlobalAllocTestGuardAllocator;
+static GLOBAL: global_alloc_test_guard::GlobalAllocTestGuardAllocator =
+    global_alloc_test_guard::GlobalAllocTestGuardAllocator;
