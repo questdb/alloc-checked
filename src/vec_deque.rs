@@ -195,38 +195,42 @@ impl<T, A: Allocator> From<crate::vec::Vec<T, A>> for VecDeque<T, A> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_util::WatermarkAllocator;
+    use crate::testing::{NoGlobalAllocGuard, WatermarkAllocator};
     use alloc::vec::Vec as InnerVec;
 
     #[test]
     fn test_new_in() {
-        let alloc = WatermarkAllocator::new(1024);
-        let deque: VecDeque<i32, _> = VecDeque::new_in(alloc.clone());
+        let _no_global_alloc_guard = NoGlobalAllocGuard::new();
+        let wma = WatermarkAllocator::new(1024);
+        let deque: VecDeque<i32, _> = VecDeque::new_in(wma.clone());
         assert!(deque.is_empty());
         assert_eq!(deque.len(), 0);
-        assert_eq!(alloc.in_use(), 0);
+        assert_eq!(wma.in_use(), 0);
     }
 
     #[test]
     fn test_with_capacity_in_success() {
-        let alloc = WatermarkAllocator::new(128);
-        let deque: Result<VecDeque<i32, _>, _> = VecDeque::with_capacity_in(10, alloc.clone());
+        let _no_global_alloc_guard = NoGlobalAllocGuard::new();
+        let wma = WatermarkAllocator::new(128);
+        let deque: Result<VecDeque<i32, _>, _> = VecDeque::with_capacity_in(10, wma.clone());
         assert!(deque.is_ok());
-        assert_eq!(alloc.in_use(), deque.unwrap().capacity() * size_of::<i32>());
+        assert_eq!(wma.in_use(), deque.unwrap().capacity() * size_of::<i32>());
     }
 
     #[test]
     fn test_with_capacity_in_failure() {
-        let alloc = WatermarkAllocator::new(4); // Set a low watermark to trigger failure
-        let deque = VecDeque::<i32, _>::with_capacity_in(10, alloc.clone());
+        let _no_global_alloc_guard = NoGlobalAllocGuard::new();
+        let wma = WatermarkAllocator::new(4); // Set a low watermark to trigger failure
+        let deque = VecDeque::<i32, _>::with_capacity_in(10, wma.clone());
         assert!(deque.is_err());
-        assert_eq!(alloc.in_use(), 0);
+        assert_eq!(wma.in_use(), 0);
     }
 
     #[test]
     fn test_push_front_back() {
-        let alloc = WatermarkAllocator::new(128);
-        let mut deque = VecDeque::new_in(alloc.clone());
+        let _no_global_alloc_guard = NoGlobalAllocGuard::new();
+        let wma = WatermarkAllocator::new(128);
+        let mut deque = VecDeque::new_in(wma.clone());
 
         // Push elements to the front and back
         assert!(deque.push_back(1).is_ok());
@@ -238,8 +242,9 @@ mod tests {
 
     #[test]
     fn test_push_front_back_allocation_failure() {
-        let alloc = WatermarkAllocator::new(16); // Small watermark to limit allocations
-        let mut deque = VecDeque::with_capacity_in(1, alloc.clone()).expect("should allocate");
+        let _no_global_alloc_guard = NoGlobalAllocGuard::new();
+        let wma = WatermarkAllocator::new(16); // Small watermark to limit allocations
+        let mut deque = VecDeque::with_capacity_in(1, wma.clone()).expect("should allocate");
         assert_eq!(deque.capacity(), 1); // overallocated by default.
 
         // Push first element should work
@@ -250,8 +255,9 @@ mod tests {
 
     #[test]
     fn test_insert_remove() {
-        let alloc = WatermarkAllocator::new(128);
-        let mut deque = VecDeque::new_in(alloc.clone());
+        let _no_global_alloc_guard = NoGlobalAllocGuard::new();
+        let wma = WatermarkAllocator::new(128);
+        let mut deque = VecDeque::new_in(wma.clone());
 
         // Insert elements
         assert!(deque.push_back(1).is_ok());
@@ -272,8 +278,9 @@ mod tests {
 
     #[test]
     fn test_insert_allocation_failure() {
-        let alloc = WatermarkAllocator::new(16); // Limited allocation capacity
-        let mut deque = VecDeque::with_capacity_in(1, alloc.clone()).expect("should allocate");
+        let _no_global_alloc_guard = NoGlobalAllocGuard::new();
+        let wma = WatermarkAllocator::new(16); // Limited allocation capacity
+        let mut deque = VecDeque::with_capacity_in(1, wma.clone()).expect("should allocate");
 
         // First insert should succeed
         assert!(deque.push_back(1).is_ok());
@@ -283,9 +290,10 @@ mod tests {
 
     #[test]
     fn test_append() {
-        let alloc = WatermarkAllocator::new(128);
-        let mut deque1 = VecDeque::new_in(alloc.clone());
-        let mut deque2 = VecDeque::new_in(alloc.clone());
+        let _no_global_alloc_guard = NoGlobalAllocGuard::new();
+        let wma = WatermarkAllocator::new(128);
+        let mut deque1 = VecDeque::new_in(wma.clone());
+        let mut deque2 = VecDeque::new_in(wma.clone());
 
         // Fill both deques
         assert!(deque1.push_back(1).is_ok());
@@ -301,18 +309,19 @@ mod tests {
 
     #[test]
     fn test_append_allocation_failure() {
-        let alloc = WatermarkAllocator::new(16);
-        let mut deque1 = VecDeque::with_capacity_in(1, alloc.clone()).expect("should allocate");
+        let _no_global_alloc_guard = NoGlobalAllocGuard::new();
+        let wma = WatermarkAllocator::new(16);
+        let mut deque1 = VecDeque::with_capacity_in(1, wma.clone()).expect("should allocate");
         assert_eq!(deque1.capacity(), 1);
-        assert_eq!(alloc.in_use(), deque1.capacity() * size_of::<i32>());
-        assert_eq!(alloc.in_use(), 4);
-        let mut deque2 = VecDeque::with_capacity_in(2, alloc.clone()).expect("should allocate");
+        assert_eq!(wma.in_use(), deque1.capacity() * size_of::<i32>());
+        assert_eq!(wma.in_use(), 4);
+        let mut deque2 = VecDeque::with_capacity_in(2, wma.clone()).expect("should allocate");
         assert_eq!(deque2.capacity(), 2);
         assert_eq!(
-            alloc.in_use(),
+            wma.in_use(),
             deque1.capacity() * size_of::<i32>() + deque2.capacity() * size_of::<i32>()
         );
-        assert_eq!(alloc.in_use(), 12);
+        assert_eq!(wma.in_use(), 12);
 
         // Push items into deque2
         assert!(deque2.push_back(1).is_ok());
@@ -325,8 +334,9 @@ mod tests {
 
     #[test]
     fn test_try_clone() {
-        let alloc = WatermarkAllocator::new(128);
-        let mut deque = VecDeque::new_in(alloc.clone());
+        let _no_global_alloc_guard = NoGlobalAllocGuard::new();
+        let wma = WatermarkAllocator::new(128);
+        let mut deque = VecDeque::new_in(wma.clone());
         deque.push_back(1).unwrap();
         deque.push_back(2).unwrap();
 
@@ -340,8 +350,9 @@ mod tests {
 
     #[test]
     fn test_try_clone_allocation_failure() {
-        let alloc = WatermarkAllocator::new(16); // Low watermark for testing allocation failure
-        let mut deque = VecDeque::new_in(alloc.clone());
+        let _no_global_alloc_guard = NoGlobalAllocGuard::new();
+        let wma = WatermarkAllocator::new(16); // Low watermark for testing allocation failure
+        let mut deque = VecDeque::new_in(wma.clone());
         deque.push_back(1).unwrap();
 
         // Cloning should fail due to allocation constraints
@@ -351,8 +362,9 @@ mod tests {
 
     #[test]
     fn test_get_mut() {
-        let alloc = WatermarkAllocator::new(128);
-        let mut deque = VecDeque::new_in(alloc.clone());
+        let _no_global_alloc_guard = NoGlobalAllocGuard::new();
+        let wma = WatermarkAllocator::new(128);
+        let mut deque = VecDeque::new_in(wma.clone());
         deque.push_back(1).unwrap();
         deque.push_back(2).unwrap();
 
@@ -364,8 +376,9 @@ mod tests {
 
     #[test]
     fn test_iter() {
-        let alloc = WatermarkAllocator::new(128);
-        let mut deque = VecDeque::new_in(alloc.clone());
+        let _no_global_alloc_guard = NoGlobalAllocGuard::new();
+        let wma = WatermarkAllocator::new(128);
+        let mut deque = VecDeque::new_in(wma.clone());
         deque.push_back(1).unwrap();
         deque.push_back(2).unwrap();
         deque.push_back(3).unwrap();
@@ -376,8 +389,9 @@ mod tests {
 
     #[test]
     fn test_iter_mut() {
-        let alloc = WatermarkAllocator::new(128);
-        let mut deque = VecDeque::new_in(alloc.clone());
+        let _no_global_alloc_guard = NoGlobalAllocGuard::new();
+        let wma = WatermarkAllocator::new(128);
+        let mut deque = VecDeque::new_in(wma.clone());
         deque.push_back(1).unwrap();
         deque.push_back(2).unwrap();
         deque.push_back(3).unwrap();
@@ -391,8 +405,9 @@ mod tests {
 
     #[test]
     fn test_range() {
-        let alloc = WatermarkAllocator::new(128);
-        let mut deque = VecDeque::new_in(alloc.clone());
+        let _no_global_alloc_guard = NoGlobalAllocGuard::new();
+        let wma = WatermarkAllocator::new(128);
+        let mut deque = VecDeque::new_in(wma.clone());
         deque.push_back(10).unwrap();
         deque.push_back(20).unwrap();
         deque.push_back(30).unwrap();
@@ -404,8 +419,9 @@ mod tests {
 
     #[test]
     fn test_range_mut() {
-        let alloc = WatermarkAllocator::new(128);
-        let mut deque = VecDeque::new_in(alloc.clone());
+        let _no_global_alloc_guard = NoGlobalAllocGuard::new();
+        let wma = WatermarkAllocator::new(128);
+        let mut deque = VecDeque::new_in(wma.clone());
         deque.push_back(5).unwrap();
         deque.push_back(10).unwrap();
         deque.push_back(15).unwrap();
@@ -419,8 +435,9 @@ mod tests {
 
     #[test]
     fn test_drain() {
-        let alloc = WatermarkAllocator::new(128);
-        let mut deque = VecDeque::new_in(alloc.clone());
+        let _no_global_alloc_guard = NoGlobalAllocGuard::new();
+        let wma = WatermarkAllocator::new(128);
+        let mut deque = VecDeque::new_in(wma.clone());
         deque.push_back(1).unwrap();
         deque.push_back(2).unwrap();
         deque.push_back(3).unwrap();
@@ -434,8 +451,9 @@ mod tests {
 
     #[test]
     fn test_clear() {
-        let alloc = WatermarkAllocator::new(128);
-        let mut deque = VecDeque::new_in(alloc.clone());
+        let _no_global_alloc_guard = NoGlobalAllocGuard::new();
+        let wma = WatermarkAllocator::new(128);
+        let mut deque = VecDeque::new_in(wma.clone());
         deque.push_back(1).unwrap();
         deque.push_back(2).unwrap();
 
@@ -446,8 +464,9 @@ mod tests {
 
     #[test]
     fn test_contains() {
-        let alloc = WatermarkAllocator::new(128);
-        let mut deque = VecDeque::new_in(alloc.clone());
+        let _no_global_alloc_guard = NoGlobalAllocGuard::new();
+        let wma = WatermarkAllocator::new(128);
+        let mut deque = VecDeque::new_in(wma.clone());
         deque.push_back(42).unwrap();
         deque.push_back(99).unwrap();
 
@@ -457,8 +476,9 @@ mod tests {
 
     #[test]
     fn test_front_mut() {
-        let alloc = WatermarkAllocator::new(128);
-        let mut deque = VecDeque::new_in(alloc.clone());
+        let _no_global_alloc_guard = NoGlobalAllocGuard::new();
+        let wma = WatermarkAllocator::new(128);
+        let mut deque = VecDeque::new_in(wma.clone());
         deque.push_back(5).unwrap();
         deque.push_back(10).unwrap();
 
@@ -470,8 +490,9 @@ mod tests {
 
     #[test]
     fn test_back_mut() {
-        let alloc = WatermarkAllocator::new(128);
-        let mut deque = VecDeque::new_in(alloc.clone());
+        let _no_global_alloc_guard = NoGlobalAllocGuard::new();
+        let wma = WatermarkAllocator::new(128);
+        let mut deque = VecDeque::new_in(wma.clone());
         deque.push_back(5).unwrap();
         deque.push_back(10).unwrap();
 
@@ -483,8 +504,9 @@ mod tests {
 
     #[test]
     fn test_pop_front() {
-        let alloc = WatermarkAllocator::new(128);
-        let mut deque = VecDeque::new_in(alloc.clone());
+        let _no_global_alloc_guard = NoGlobalAllocGuard::new();
+        let wma = WatermarkAllocator::new(128);
+        let mut deque = VecDeque::new_in(wma.clone());
         deque.push_back(1).unwrap();
         deque.push_back(2).unwrap();
 
@@ -495,8 +517,9 @@ mod tests {
 
     #[test]
     fn test_pop_back() {
-        let alloc = WatermarkAllocator::new(128);
-        let mut deque = VecDeque::new_in(alloc.clone());
+        let _no_global_alloc_guard = NoGlobalAllocGuard::new();
+        let wma = WatermarkAllocator::new(128);
+        let mut deque = VecDeque::new_in(wma.clone());
         deque.push_back(3).unwrap();
         deque.push_back(4).unwrap();
 
@@ -507,8 +530,9 @@ mod tests {
 
     #[test]
     fn test_make_contiguous() {
-        let alloc = WatermarkAllocator::new(128);
-        let mut deque = VecDeque::new_in(alloc.clone());
+        let _no_global_alloc_guard = NoGlobalAllocGuard::new();
+        let wma = WatermarkAllocator::new(128);
+        let mut deque = VecDeque::new_in(wma.clone());
 
         // Alternate between front and back pushes to create a discontinuous buffer.
         deque.push_back(1).unwrap();
@@ -526,8 +550,9 @@ mod tests {
 
     #[test]
     fn test_try_clone_success() {
-        let alloc = WatermarkAllocator::new(128);
-        let mut deque = VecDeque::new_in(alloc.clone());
+        let _no_global_alloc_guard = NoGlobalAllocGuard::new();
+        let wma = WatermarkAllocator::new(128);
+        let mut deque = VecDeque::new_in(wma.clone());
 
         // Populate the deque with some elements.
         deque.push_back(1).unwrap();
@@ -549,9 +574,10 @@ mod tests {
 
     #[test]
     fn test_try_clone_failure() {
+        let _no_global_alloc_guard = NoGlobalAllocGuard::new();
         // Set a low watermark to trigger allocation failure during cloning.
-        let alloc = WatermarkAllocator::new(16); // Low watermark for small allocations.
-        let mut deque = VecDeque::new_in(alloc.clone());
+        let wma = WatermarkAllocator::new(16); // Low watermark for small allocations.
+        let mut deque = VecDeque::new_in(wma.clone());
 
         // Fill deque so it requires more allocation on cloning.
         deque.push_back(1).unwrap();
@@ -566,8 +592,9 @@ mod tests {
 
     #[test]
     fn test_try_clone_from_success() {
-        let alloc = WatermarkAllocator::new(128);
-        let mut original = VecDeque::new_in(alloc.clone());
+        let _no_global_alloc_guard = NoGlobalAllocGuard::new();
+        let wma = WatermarkAllocator::new(128);
+        let mut original = VecDeque::new_in(wma.clone());
 
         // Populate the original deque with some elements.
         original.push_back(1).unwrap();
@@ -575,7 +602,7 @@ mod tests {
         original.push_back(3).unwrap();
 
         // Create a target deque with different contents to clone into.
-        let mut target = VecDeque::new_in(alloc.clone());
+        let mut target = VecDeque::new_in(wma.clone());
         target.push_back(10).unwrap();
         target.push_back(20).unwrap();
 

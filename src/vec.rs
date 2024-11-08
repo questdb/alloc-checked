@@ -294,14 +294,15 @@ impl<T, A: Allocator> AsMut<[T]> for Vec<T, A> {
 mod tests {
     use super::*;
     use crate::claim::Claim;
-    use crate::test_util::WatermarkAllocator;
-    use alloc::alloc::Global;
+    use crate::testing::{AllowGlobalAllocGuard, NoGlobalAllocGuard};
+    use crate::testing::{WatermarkAllocator, WatermarkAllocator2};
     use alloc::boxed::Box;
     use alloc::collections::TryReserveError;
     use alloc::{format, vec};
 
     #[test]
     fn test_basics() {
+        let _no_global_alloc_guard = NoGlobalAllocGuard::new();
         let wma = WatermarkAllocator::new(32);
         let mut vec = Vec::new_in(wma.clone());
         assert_eq!(vec.len(), 0);
@@ -328,6 +329,7 @@ mod tests {
 
     #[test]
     fn test_with_capacity_in() {
+        let _no_global_alloc_guard = NoGlobalAllocGuard::new();
         let wma = WatermarkAllocator::new(32);
         let vec: Vec<usize, _> = Vec::with_capacity_in(4, wma.clone()).unwrap();
         assert_eq!(vec.len(), 0);
@@ -340,6 +342,7 @@ mod tests {
 
     #[test]
     fn test_reserve() {
+        let _no_global_alloc_guard = NoGlobalAllocGuard::new();
         let wma = WatermarkAllocator::new(32);
         let mut vec: Vec<bool, _> = Vec::new_in(wma);
         vec.reserve(32).unwrap();
@@ -350,17 +353,22 @@ mod tests {
 
     #[test]
     fn test_fmt_debug() {
+        let _no_global_alloc_guard = NoGlobalAllocGuard::new();
         let wma = WatermarkAllocator::new(32);
         let mut vec = Vec::new_in(wma);
         vec.push(1).unwrap();
         vec.push(2).unwrap();
         vec.push(3).unwrap();
         vec.push(4).unwrap();
-        assert_eq!(format!("{:?}", vec), "[1, 2, 3, 4]");
+        {
+            let _allow_global_alloc = AllowGlobalAllocGuard::new();
+            assert_eq!(format!("{:?}", vec), "[1, 2, 3, 4]");
+        }
     }
 
     #[test]
     fn test_iter() {
+        let _no_global_alloc_guard = NoGlobalAllocGuard::new();
         let wma = WatermarkAllocator::new(32);
         let mut vec = Vec::new_in(wma);
         vec.push(1).unwrap();
@@ -377,6 +385,7 @@ mod tests {
 
     #[test]
     fn test_iter_mut() {
+        let _no_global_alloc_guard = NoGlobalAllocGuard::new();
         let wma = WatermarkAllocator::new(32);
         let mut vec = Vec::new_in(wma);
         vec.push(1).unwrap();
@@ -393,6 +402,7 @@ mod tests {
 
     #[test]
     fn test_as_ptr() {
+        let _no_global_alloc_guard = NoGlobalAllocGuard::new();
         let wma = WatermarkAllocator::new(32);
         let mut vec = Vec::new_in(wma.clone());
         assert_eq!(wma.in_use(), 0);
@@ -411,6 +421,7 @@ mod tests {
 
     #[test]
     fn test_as_mut_ptr() {
+        let _no_global_alloc_guard = NoGlobalAllocGuard::new();
         let wma = WatermarkAllocator::new(64);
         let mut vec = Vec::new_in(wma.clone());
         assert_eq!(wma.in_use(), 0);
@@ -433,6 +444,7 @@ mod tests {
 
     #[test]
     fn test_index() {
+        let _no_global_alloc_guard = NoGlobalAllocGuard::new();
         let wma = WatermarkAllocator::new(32);
         let mut vec = Vec::new_in(wma);
         vec.push(1).unwrap();
@@ -453,6 +465,7 @@ mod tests {
 
     #[test]
     fn test_extend_from_slice_clone() {
+        let _no_global_alloc_guard = NoGlobalAllocGuard::new();
         let wma = WatermarkAllocator::new(32);
         let mut vec = Vec::new_in(wma);
         vec.extend_from_slice(&[Claimable(1), Claimable(2), Claimable(3), Claimable(4)])
@@ -461,6 +474,7 @@ mod tests {
 
     #[test]
     fn test_extend_from_slice_copy() {
+        let _no_global_alloc_guard = NoGlobalAllocGuard::new();
         let wma = WatermarkAllocator::new(32);
         let mut vec = Vec::new_in(wma);
         vec.extend_from_slice(&[1, 2, 3, 4]).unwrap();
@@ -473,6 +487,7 @@ mod tests {
 
     #[test]
     fn test_deref() {
+        let _no_global_alloc_guard = NoGlobalAllocGuard::new();
         let wma = WatermarkAllocator::new(32);
         let mut vec = Vec::new_in(wma);
         vec.push(1).unwrap();
@@ -484,6 +499,7 @@ mod tests {
 
     #[test]
     fn test_deref_mut() {
+        let _no_global_alloc_guard = NoGlobalAllocGuard::new();
         let wma = WatermarkAllocator::new(32);
         let mut vec = Vec::new_in(wma);
         vec.push(1).unwrap();
@@ -535,6 +551,8 @@ mod tests {
 
     #[test]
     fn test_extend() {
+        let _no_global_alloc_guard = NoGlobalAllocGuard::new();
+
         // Test the optimised with mixed pre-reserved and dynamic allocation extend paths.
         let wma = WatermarkAllocator::new(32 * size_of::<usize>());
         {
@@ -572,6 +590,7 @@ mod tests {
 
     #[test]
     fn test_truncate() {
+        let _no_global_alloc_guard = NoGlobalAllocGuard::new();
         let wma = WatermarkAllocator::new(32);
         let mut vec = Vec::new_in(wma);
         vec.push(1).unwrap();
@@ -587,6 +606,7 @@ mod tests {
 
     #[test]
     fn test_extend_with() {
+        let _no_global_alloc_guard = NoGlobalAllocGuard::new();
         let wma = WatermarkAllocator::new(32);
         let mut vec = Vec::new_in(wma);
         vec.extend_with(3, 1).unwrap();
@@ -595,6 +615,7 @@ mod tests {
 
     #[test]
     fn test_resize() {
+        let _no_global_alloc_guard = NoGlobalAllocGuard::new();
         let wma = WatermarkAllocator::new(64);
         let mut vec = Vec::new_in(wma);
         vec.resize(3, 1).unwrap();
@@ -607,6 +628,7 @@ mod tests {
 
     #[test]
     fn test_resize_with() {
+        let _no_global_alloc_guard = NoGlobalAllocGuard::new();
         let wma = WatermarkAllocator::new(64);
         let mut vec = Vec::new_in(wma);
         vec.resize_with(3, || 1).unwrap();
@@ -638,15 +660,17 @@ mod tests {
 
     #[test]
     fn test_eq() {
+        let _no_global_alloc_guard = NoGlobalAllocGuard::new();
         let wma = WatermarkAllocator::new(64);
+        let wma2 = WatermarkAllocator2::new(1024);
 
         // __impl_slice_eq1! { [A1: Allocator, A2: Allocator] Vec<T, A1>, Vec<U, A2> }
         {
             let mut lhs = Vec::new_in(wma.clone());
-            let mut rhs = Vec::new_in(Global);
+            let mut rhs = Vec::new_in(wma2);
 
-            lhs.extend(vec![1, 2, 3]).unwrap();
-            rhs.extend(vec![w(1), w(2), w(3)]).unwrap();
+            lhs.extend([1, 2, 3]).unwrap();
+            rhs.extend([w(1), w(2), w(3)]).unwrap();
             assert_eq!(lhs, rhs);
             assert_eq!(rhs, lhs);
 
@@ -659,7 +683,7 @@ mod tests {
         // __impl_slice_eq1! { [A: Allocator] &[T], Vec<U, A> }
         {
             let mut lhs = Vec::new_in(wma.clone());
-            lhs.extend(vec![1, 2, 3]).unwrap();
+            lhs.extend([1, 2, 3]).unwrap();
             let rhs: &[IntWrapper] = &[w(1), w(2), w(3)];
             assert_eq!(lhs, rhs);
             assert_eq!(rhs, lhs);
@@ -673,9 +697,14 @@ mod tests {
         // __impl_slice_eq1! { [A: Allocator] &mut [T], Vec<U, A> }
         {
             let mut lhs = Vec::new_in(wma.clone());
-            lhs.extend(vec![1, 2, 3]).unwrap();
+            lhs.extend([1, 2, 3]).unwrap();
 
-            let mut rhs_vec = vec![w(1), w(2), w(3)];
+            let mut rhs_vec = {
+                let _allow_global_alloc = AllowGlobalAllocGuard::new();
+                let mut v = vec![w(1), w(2), w(3)];
+                v.reserve(1);
+                v
+            };
             let rhs: &mut [IntWrapper] = &mut rhs_vec;
 
             assert_eq!(lhs, rhs);
@@ -685,28 +714,44 @@ mod tests {
             let rhs2: &mut [IntWrapper] = &mut rhs_vec;
             assert_ne!(lhs, rhs2);
             assert_ne!(rhs2, lhs);
+
+            {
+                let _allow_global_alloc = AllowGlobalAllocGuard::new();
+                drop(rhs_vec)
+            }
         }
 
         // __impl_slice_eq1! { [A: Allocator] Vec<T, A>, [U] }
         // __impl_slice_eq1! { [A: Allocator] [T], Vec<U, A> }
         {
             let mut lhs = Vec::new_in(wma.clone());
-            lhs.extend(vec![1, 2, 3]).unwrap();
+            lhs.extend([1, 2, 3]).unwrap();
 
-            let rhs: Box<[IntWrapper]> = Box::new([w(1), w(2), w(3)]);
+            // We explicitly elide the `len` part here by using a box.
+            let (rhs, rhs2) = {
+                let _allow_global_alloc = AllowGlobalAllocGuard::new();
+                let rhs: Box<[IntWrapper]> = Box::new([w(1), w(2), w(3)]);
+                let rhs2: Box<[IntWrapper]> = Box::new([w(1), w(2), w(3), w(4)]);
+                (rhs, rhs2)
+            };
             assert_eq!(lhs, *rhs);
             assert_eq!(*rhs, lhs);
 
-            let rhs2: Box<[IntWrapper]> = Box::new([w(1), w(2), w(3), w(4)]);
             assert_ne!(lhs, *rhs2);
             assert_ne!(*rhs2, lhs);
+
+            {
+                let _allow_global_alloc = AllowGlobalAllocGuard::new();
+                drop(rhs);
+                drop(rhs2);
+            }
         }
 
         // __impl_slice_eq1! { [A: Allocator, const N: usize] Vec<T, A>, [U; N] }
         // __impl_slice_eq1! { [A: Allocator, const N: usize] [T; N], Vec<U, A> }
         {
             let mut lhs = Vec::new_in(wma.clone());
-            lhs.extend(vec![1, 2, 3]).unwrap();
+            lhs.extend([1, 2, 3]).unwrap();
 
             let rhs: [IntWrapper; 3] = [w(1), w(2), w(3)];
             assert_eq!(lhs, rhs); // Compare Vec with fixed-size array
@@ -721,7 +766,7 @@ mod tests {
         // __impl_slice_eq1! { [A: Allocator, const N: usize] &[T; N], Vec<U, A> }
         {
             let mut lhs = Vec::new_in(wma.clone());
-            lhs.extend(vec![1, 2, 3]).unwrap();
+            lhs.extend([1, 2, 3]).unwrap();
 
             let rhs_arr: [IntWrapper; 3] = [w(1), w(2), w(3)];
             let rhs: &[IntWrapper; 3] = &rhs_arr;
@@ -746,9 +791,10 @@ mod tests {
 
     #[test]
     fn test_as_ref() {
+        let _no_global_alloc_guard = NoGlobalAllocGuard::new();
         let wma = WatermarkAllocator::new(128);
         let mut vec1 = Vec::new_in(wma);
-        vec1.extend(vec![1, 2, 3]).unwrap();
+        vec1.extend([1, 2, 3]).unwrap();
         let vec2 = vec1.try_clone().unwrap();
 
         assert_eq!(vec1, vec2);
@@ -772,9 +818,10 @@ mod tests {
 
     #[test]
     fn test_as_mut() {
+        let _no_global_alloc_guard = NoGlobalAllocGuard::new();
         let wma = WatermarkAllocator::new(128);
         let mut vec1 = Vec::new_in(wma);
-        vec1.extend(vec![1, 2, 3]).unwrap();
+        vec1.extend([1, 2, 3]).unwrap();
         let vec2 = vec1.try_clone().unwrap();
         assert_eq!(vec1, vec2);
 
@@ -787,6 +834,7 @@ mod tests {
 
     #[test]
     fn test_try_clone() {
+        let _no_global_alloc_guard = NoGlobalAllocGuard::new();
         let wma = WatermarkAllocator::new(64);
         let mut vec1 = Vec::new_in(wma.clone());
         vec1.extend([1usize, 2, 3, 4, 5, 6, 7, 8]).unwrap();
