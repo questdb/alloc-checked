@@ -28,10 +28,6 @@ features = [
     "raw-entry"
 ]
 
-[dev-dependencies]
-heapless = "0.7"
-
-
 [features]
 default = ["hash_collections"]
 hash_collections = ["hashbrown"]
