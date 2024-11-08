@@ -1,8 +1,9 @@
 use crate::claim::Claim;
 use core::alloc::Allocator;
-pub use hashbrown::hash_map::{Keys, Values, ValuesMut};
+use core::hash::{BuildHasher, Hash};
+pub use hashbrown::hash_map::{Keys, Values, ValuesMut, Iter, IterMut};
 pub use hashbrown::DefaultHashBuilder;
-use hashbrown::HashMap as InnerHashMap;
+use hashbrown::{HashMap as InnerHashMap, TryReserveError};
 
 pub struct HashMap<K, V, A: Allocator, S = DefaultHashBuilder> {
     inner: InnerHashMap<K, V, S, A>,
@@ -42,12 +43,22 @@ impl<K, V, A: Allocator + Claim, S> HashMap<K, V, A, S> {
 
     #[inline]
     pub fn hasher(&self) -> &S {
-        &self.inner.hasher()
+        self.inner.hasher()
     }
 
     #[inline]
     pub fn capacity(&self) -> usize {
         self.inner.capacity()
+    }
+
+    #[inline]
+    pub fn clear(&mut self) {
+        // TODO(amunra): May this reallocate memory?
+    }
+
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.inner.is_empty()
     }
 
     #[inline]
@@ -64,4 +75,33 @@ impl<K, V, A: Allocator + Claim, S> HashMap<K, V, A, S> {
     pub fn values_mut(&mut self) -> ValuesMut<'_, K, V> {
         self.inner.values_mut()
     }
+
+    #[inline]
+    pub fn iter(&self) -> Iter<'_, K, V> {
+        self.inner.iter()
+    }
+
+    #[inline]
+    pub fn iter_mut(&mut self) -> IterMut<'_, K, V> {
+        self.inner.iter_mut()
+    }
 }
+
+impl<K, V, A, S> HashMap<K, V, A, S>
+where
+    K: Eq + Hash,
+    A: Allocator + Claim,
+    S: BuildHasher,
+{
+    #[inline]
+    pub fn reserve(&mut self, additional: usize) -> Result<(), TryReserveError> {
+        self.inner.try_reserve(additional)
+    }
+
+    // #[inline]
+    // pub fn remove<Q: ?Sized>(&mut self, k: &Q) -> Option<V> {
+    //     // TODO(amunra): May this reallocate memory?
+    //     self.inner.remove(k)
+    // }
+}
+

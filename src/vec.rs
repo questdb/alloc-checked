@@ -298,6 +298,7 @@ mod tests {
     use core::alloc::{AllocError, Layout};
     use core::ptr::NonNull;
     use core::sync::atomic::{AtomicUsize, Ordering};
+    use crate::global_alloc_test_guard::NoGlobalAllocGuard;
 
     #[derive(Clone)]
     struct WatermarkAllocator {
@@ -351,6 +352,7 @@ mod tests {
 
     #[test]
     fn test_basics() {
+        let _g = NoGlobalAllocGuard::new();
         let wma = WatermarkAllocator::new(32);
         let mut vec = Vec::new_in(wma.clone());
         assert_eq!(vec.len(), 0);
