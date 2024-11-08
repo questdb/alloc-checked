@@ -5,7 +5,7 @@ use core::sync::atomic::{AtomicUsize, Ordering};
 use std::alloc::{AllocError, Allocator, Global, GlobalAlloc, Layout, System};
 
 thread_local! {
-    static GLOBAL_ALLOC_ALLOWED: std::cell::RefCell<bool> = std::cell::RefCell::new(true);
+    static GLOBAL_ALLOC_ALLOWED: std::cell::RefCell<bool> = const { std::cell::RefCell::new(true) };
 }
 
 struct NoPubCtor;
@@ -183,10 +183,6 @@ impl WatermarkAllocator2 {
     pub fn new(watermark: usize) -> Self {
         let inner = WatermarkAllocator::new(watermark);
         Self(inner)
-    }
-
-    pub fn in_use(&self) -> usize {
-        self.0.in_use()
     }
 }
 
