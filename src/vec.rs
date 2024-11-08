@@ -328,10 +328,7 @@ mod tests {
                 let _g = AllowNextGlobalAllocGuard::new();
                 AtomicUsize::new(0).into()
             });
-            Self {
-                watermark,
-                in_use,
-            }
+            Self { watermark, in_use }
         }
     }
 
@@ -346,7 +343,11 @@ mod tests {
                 let _g = AllowNextGlobalAllocGuard::new();
                 Global.allocate(layout)?
             };
-            let true_new_in_use = self.in_use.as_ref().unwrap().fetch_add(allocated.len(), Ordering::SeqCst);
+            let true_new_in_use = self
+                .in_use
+                .as_ref()
+                .unwrap()
+                .fetch_add(allocated.len(), Ordering::SeqCst);
             unsafe {
                 if true_new_in_use > self.watermark {
                     let ptr = allocated.as_ptr() as *mut u8;
@@ -365,7 +366,10 @@ mod tests {
         unsafe fn deallocate(&self, ptr: NonNull<u8>, layout: Layout) {
             let _g = AllowNextGlobalAllocGuard::new();
             Global.deallocate(ptr, layout);
-            self.in_use.as_ref().unwrap().fetch_sub(layout.size(), Ordering::SeqCst);
+            self.in_use
+                .as_ref()
+                .unwrap()
+                .fetch_sub(layout.size(), Ordering::SeqCst);
         }
     }
 
@@ -385,14 +389,8 @@ mod tests {
         vec.push(4).unwrap();
         assert_eq!(vec.len(), 4);
         assert_eq!(vec.capacity(), 4);
-        assert_eq!(
-            wma.in_use(),
-            vec.capacity() * size_of::<i32>()
-        );
-        assert_eq!(
-            vec.allocator().in_use(),
-            vec.capacity() * size_of::<i32>()
-        );
+        assert_eq!(wma.in_use(), vec.capacity() * size_of::<i32>());
+        assert_eq!(vec.allocator().in_use(), vec.capacity() * size_of::<i32>());
         let _err: TryReserveError = vec.push(5).unwrap_err();
         assert_eq!(vec.as_slice(), &[1, 2, 3, 4]);
         assert_eq!(vec.len(), 4);
