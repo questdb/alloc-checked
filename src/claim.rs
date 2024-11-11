@@ -1,3 +1,4 @@
+use alloc::alloc::Global;
 use alloc::rc::Rc;
 use alloc::sync::Arc;
 use core::convert::Infallible;
@@ -26,7 +27,7 @@ macro_rules! impl_claim_for {
 impl_claim_for! {
     (), u8, u16, u32, u64, u128, usize,
     i8, i16, i32, i64, i128, isize,
-    f32, f64, bool, char
+    f32, f64, bool, char, Global
 }
 
 impl<T: ?Sized> Claim for *const T {}

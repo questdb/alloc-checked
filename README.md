@@ -7,6 +7,8 @@ The wrapper collection types provide two main benefits:
 * They can't be used incorrectly by virtue of lacking APIs which panic.
 * Provide additional convenience methods for working with the collection in a checked manner.
 
+*N.B.:* You might find the [`heapless`](https://docs.rs/heapless/latest/heapless/) crate useful too!
+
 ## Restrictions
 
 The crate requires a recent build of the Rust "nightly" compiler, as it uses the

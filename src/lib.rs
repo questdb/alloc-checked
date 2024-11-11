@@ -10,6 +10,9 @@ pub mod try_clone;
 pub mod vec;
 pub mod vec_deque;
 
+#[cfg(feature = "hash_collections")]
+pub mod hash;
+
 #[cfg(test)]
 pub(crate) mod testing;
 
