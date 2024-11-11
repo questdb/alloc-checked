@@ -195,7 +195,7 @@ impl<T, A: Allocator> From<crate::vec::Vec<T, A>> for VecDeque<T, A> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::testing::{NoGlobalAllocGuard, WatermarkAllocator};
+    use crate::testing::{AllowGlobalAllocGuard, NoGlobalAllocGuard, WatermarkAllocator};
     use alloc::vec::Vec as InnerVec;
 
     #[test]
@@ -383,8 +383,17 @@ mod tests {
         deque.push_back(2).unwrap();
         deque.push_back(3).unwrap();
 
-        let values: InnerVec<_> = deque.iter().cloned().collect();
+        let mut values = {
+            let _allow_global_alloc_guard = AllowGlobalAllocGuard::new();
+            InnerVec::with_capacity(deque.len())
+        };
+        values.extend(deque.iter().cloned());
         assert_eq!(values, [1, 2, 3]);
+
+        {
+            let _allow_global_alloc_guard = AllowGlobalAllocGuard::new();
+            drop(values);
+        }
     }
 
     #[test]
@@ -399,8 +408,17 @@ mod tests {
         for value in deque.iter_mut() {
             *value *= 2;
         }
-        let values: InnerVec<_> = deque.iter().cloned().collect();
+
+        let mut values = {
+            let _allow_global_alloc_guard = AllowGlobalAllocGuard::new();
+            InnerVec::with_capacity(deque.len())
+        };
+        values.extend(deque.iter().cloned());
         assert_eq!(values, [2, 4, 6]);
+        {
+            let _allow_global_alloc_guard = AllowGlobalAllocGuard::new();
+            drop(values);
+        }
     }
 
     #[test]
@@ -413,8 +431,16 @@ mod tests {
         deque.push_back(30).unwrap();
         deque.push_back(40).unwrap();
 
-        let values: InnerVec<_> = deque.range(1..3).cloned().collect();
+        let mut values = {
+            let _allow_global_alloc_guard = AllowGlobalAllocGuard::new();
+            InnerVec::with_capacity(deque.len())
+        };
+        values.extend(deque.range(1..3).cloned());
         assert_eq!(values, [20, 30]);
+        {
+            let _allow_global_alloc_guard = AllowGlobalAllocGuard::new();
+            drop(values);
+        }
     }
 
     #[test]
@@ -429,8 +455,17 @@ mod tests {
         for value in deque.range_mut(1..3) {
             *value += 10;
         }
-        let values: InnerVec<_> = deque.iter().cloned().collect();
+
+        let mut values = {
+            let _allow_global_alloc_guard = AllowGlobalAllocGuard::new();
+            InnerVec::with_capacity(deque.len())
+        };
+        values.extend(deque.iter().cloned());
         assert_eq!(values, [5, 20, 25]);
+        {
+            let _allow_global_alloc_guard = AllowGlobalAllocGuard::new();
+            drop(values);
+        }
     }
 
     #[test]
@@ -443,10 +478,20 @@ mod tests {
         deque.push_back(3).unwrap();
         deque.push_back(4).unwrap();
 
-        let drained: InnerVec<_> = deque.drain(1..3).collect();
+        let mut drained = {
+            let _allow_alloc_guard = AllowGlobalAllocGuard::new();
+            InnerVec::with_capacity(deque.len())
+        };
+
+        drained.extend(deque.drain(1..3));
         assert_eq!(drained, [2, 3]);
         assert_eq!(deque.len(), 2);
         assert_eq!(deque.get(1), Some(&4));
+
+        {
+            let _allow_alloc_guard = AllowGlobalAllocGuard::new();
+            drop(drained);
+        }
     }
 
     #[test]
@@ -566,10 +611,13 @@ mod tests {
         assert!(cloned.is_ok());
         let cloned = cloned.unwrap();
         assert_eq!(cloned.len(), deque.len());
-        assert_eq!(
-            cloned.iter().collect::<InnerVec<_>>(),
-            deque.iter().collect::<InnerVec<_>>()
-        );
+        {
+            let _allow_alloc_guard = AllowGlobalAllocGuard::new();
+            assert_eq!(
+                cloned.iter().collect::<InnerVec<_>>(),
+                deque.iter().collect::<InnerVec<_>>()
+            );
+        }
     }
 
     #[test]
@@ -614,9 +662,12 @@ mod tests {
 
         // Check that the target now matches the original.
         assert_eq!(target.len(), original.len());
-        assert_eq!(
-            target.iter().collect::<InnerVec<_>>(),
-            original.iter().collect::<InnerVec<_>>()
-        );
+        {
+            let _allow_global_alloc_guard = AllowGlobalAllocGuard::new();
+            assert_eq!(
+                target.iter().collect::<InnerVec<_>>(),
+                original.iter().collect::<InnerVec<_>>()
+            );
+        }
     }
 }

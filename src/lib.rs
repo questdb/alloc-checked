@@ -12,3 +12,7 @@ pub mod vec_deque;
 
 #[cfg(test)]
 pub(crate) mod testing;
+
+#[cfg(test)]
+#[global_allocator]
+static GLOBAL: testing::GlobalAllocTestGuardAllocator = testing::GlobalAllocTestGuardAllocator;
