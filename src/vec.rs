@@ -146,6 +146,10 @@ impl<T, A: Allocator> Vec<T, A> {
         }
         Ok(())
     }
+
+    pub(crate) fn into_inner(self) -> InnerVec<T, A> {
+        self.inner
+    }
 }
 
 impl<T: Claim, A: Allocator> Vec<T, A> {
