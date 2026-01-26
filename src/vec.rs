@@ -116,6 +116,11 @@ impl<T, A: Allocator> Vec<T, A> {
     }
 
     #[inline]
+    pub unsafe fn set_len(&mut self, new_len: usize) {
+        self.inner.set_len(new_len);
+    }
+
+    #[inline]
     pub fn clear(&mut self) {
         self.inner.clear();
     }
