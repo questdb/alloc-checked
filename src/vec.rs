@@ -115,6 +115,16 @@ impl<T, A: Allocator> Vec<T, A> {
         self.inner.as_mut_ptr()
     }
 
+    /// # Safety
+    ///
+    /// - `new_len` must be less than or equal to [`capacity()`].
+    ///
+    /// [`capacity()`]: Self::capacity
+    #[inline]
+    pub unsafe fn set_len(&mut self, new_len: usize) {
+        self.inner.set_len(new_len);
+    }
+
     #[inline]
     pub fn clear(&mut self) {
         self.inner.clear();
