@@ -853,4 +853,24 @@ mod tests {
         assert_eq!(wma.in_use(), 64);
         assert!(vec1.try_clone().is_err());
     }
+
+    #[test]
+    fn test_set_len() {
+        let _no_global_alloc_guard = NoGlobalAllocGuard::new();
+        let wma = WatermarkAllocator::new(64);
+        let mut vec: Vec<i32, _> = Vec::with_capacity_in(4, wma).unwrap();
+
+        // Write values directly to the buffer
+        let ptr = vec.as_mut_ptr();
+        unsafe {
+            ptr.write(1);
+            ptr.add(1).write(2);
+            ptr.add(2).write(3);
+            // Now set the length to match initialized elements
+            vec.set_len(3);
+        }
+
+        assert_eq!(vec.len(), 3);
+        assert_eq!(vec.as_slice(), &[1, 2, 3]);
+    }
 }
